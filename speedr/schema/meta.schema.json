@@ -118,12 +118,12 @@
         "commit": {
           "type": "string",
           "pattern": "^[0-9a-f]{40}$",
-          "description": "r-benchmarks commit (speedR's upstream.toml)"
+          "description": "r-benchmarks commit (the rbench package in speedR's uv.lock)"
         },
         "bench_commit": {
           "type": "string",
           "pattern": "^[0-9a-f]{40}$",
-          "description": "bench commit locked by r-benchmarks' uv.lock at that commit"
+          "description": "bench commit (pinned by rbench, recorded in speedR's uv.lock)"
         },
         "benchmarks": {
           "type": "integer",

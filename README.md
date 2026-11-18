@@ -18,9 +18,8 @@ Performance*.
 |---|---|
 | [`site/`](site/) | the dashboard: Quarto + R, static ([README](site/README.md)) |
 | [`speedr/`](speedr/) | the pipeline (Python): identifiers, machine registry, run metadata, the suite pin; build/ingest stages to come |
-| [`drivers/`](drivers/) | the timing and profile passes, built on r-benchmarks' `rbench` and `rbench_perf` |
+| [`drivers/`](drivers/) | the timing and profile passes, built on r-benchmarks' `rbench` and `rbench.perf` |
 | [`categories/`](categories/) | the perf frame classifier from VMIL'26 (`perf-rules.R`) and the step that turns recordings into category shares |
-| [`upstream.toml`](upstream.toml) | the r-benchmarks commit speedR runs |
 | [`machines/`](machines/) | one TOML file per benchmark machine ([how to add one](docs/machines.md)) |
 | [`configs.toml`](configs.toml) | build configurations: default, no-bytecode, LTO, GC variants, PGO, ... |
 | [`docs/`](docs/) | [benchmarking guidelines](docs/guidelines.md) (draft), [machines](docs/machines.md) |
@@ -30,7 +29,7 @@ Related repositories:
 
 - [PRL-PRG/r-benchmarks](https://github.com/PRL-PRG/r-benchmarks): the
   benchmark suite (118 programs), its harnesses and drivers. speedR pins one
-  commit of it (`upstream.toml`) and reuses its suite definitions, harnesses,
+  commit of it (the `rbench` package, in `pyproject.toml`) and reuses its suite definitions, harnesses,
   metrics and package hook; speedR's drivers change only the R command line,
   the run design and the configuration's environment.
 - [PRL-PRG/bench](https://github.com/PRL-PRG/bench): the benchmarking library
@@ -70,13 +69,12 @@ uv run pytest                # tests
 uv run ruff check .          # lint
 ```
 
-The two passes, on any R (they run in r-benchmarks' own environment):
+The two passes, on any R:
 
 ```sh
-uv run speedr fetch-suite ../r-benchmarks-pinned     # check out the pinned commit
-export RBENCH_ROOT=../r-benchmarks-pinned
-uv run --project $RBENCH_ROOT python drivers/timing.py --R /path/to/R --json timing.json
-uv run --project $RBENCH_ROOT python drivers/profile.py --R /path/to/R --json perf.json --dir perf/
+uv run speedr suite                  # the rbench and bench commits in use
+uv run python drivers/timing.py --R /path/to/R --json timing.json
+uv run python drivers/profile.py --R /path/to/R --json perf.json --dir perf/
 uv run speedr profile-manifest perf.json perf/ manifest.csv
 Rscript categories/categorize.R shares.csv manifest.csv  # needs dplyr, tidyr, readr, stringr, tibble
 ```

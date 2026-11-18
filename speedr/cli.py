@@ -1,6 +1,6 @@
 """`speedr` command line. Grows a subcommand per pipeline stage (build, run,
 profile, ingest, ...); for now it covers the registry, the metadata schema, the
-pinned suite and the profile manifest."""
+suite pin and the profile manifest."""
 
 import argparse
 import json
@@ -42,11 +42,9 @@ def cmd_check_results(args: argparse.Namespace) -> int:
     return 1 if problems else 0
 
 
-def cmd_fetch_suite(args: argparse.Namespace) -> int:
-    p = upstream.pin()
-    dest = upstream.checkout(Path(args.dest), p)
-    print(f"r-benchmarks {p.commit} in {dest}")
-    print(f"bench        {upstream.bench_commit(dest)} (r-benchmarks' uv.lock)")
+def cmd_suite(args: argparse.Namespace) -> int:
+    for name, commit in upstream.commits().items():
+        print(f"{name:7} {commit}")
     return 0
 
 
@@ -70,13 +68,11 @@ def parser() -> argparse.ArgumentParser:
     v = sub.add_parser("validate-meta", help="check meta.json files against the schema")
     v.add_argument("files", nargs="+", metavar="meta.json")
     v.set_defaults(func=cmd_validate_meta)
-    r = sub.add_parser("check-results", help="check an speedR-results checkout's layout")
+    r = sub.add_parser("check-results", help="check a speedR-results checkout's layout")
     r.add_argument("root", metavar="DIR")
     r.set_defaults(func=cmd_check_results)
-    f = sub.add_parser("fetch-suite",
-                       help="check out the r-benchmarks commit pinned in upstream.toml")
-    f.add_argument("dest", metavar="DIR")
-    f.set_defaults(func=cmd_fetch_suite)
+    sub.add_parser("suite", help="show the rbench and bench commits, checked against the "
+                   "environment").set_defaults(func=cmd_suite)
     pm = sub.add_parser("profile-manifest",
                         help="list a profile pass's recordings for categories/categorize.R")
     pm.add_argument("report", metavar="REPORT.json", help="the pass's --json report")

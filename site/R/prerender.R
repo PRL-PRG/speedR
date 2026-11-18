@@ -10,7 +10,7 @@ source("R/load.R")
 source("R/stats.R")
 source("R/ubuntu.R")
 
-if (is_mock() && !file.exists(file.path("data", "mock", "runs.csv"))) {
+if (is_mock() && !file.exists(file.path("data", "mock", "samples.csv"))) {
   message("pre-render: generating mock data")
   source("R/mock.R")
   generate_mock("data/mock")

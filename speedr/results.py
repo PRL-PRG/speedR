@@ -1,15 +1,15 @@
 """The layout of speedR-results, and a check that a checkout follows it.
 
     runs/<machine>/<impl>/<version>/<config>/<run_id>/meta.json   one per run
-    index/*.csv[.gz]                                              what the dashboard reads
+    index/*.csv                                                   what the dashboard reads
 
 The index tables are derived from runs/ by the ingest step. Columns listed
 here are required; extra columns are allowed so the index can grow without
-breaking older dashboards.
+breaking older dashboards. Everything is stored uncompressed: git compresses
+objects and deltas itself, and a compressed file defeats both.
 """
 
 import csv
-import gzip
 import json
 from pathlib import Path
 
@@ -24,15 +24,14 @@ INDEX_TABLES: dict[str, list[str]] = {
     "events.csv": ["machine", "date", "event"],
     "unsupported.csv": ["machine", "impl", "version", "config", "benchmark", "reason"],
     # one row per benchmark process: median iteration time, GC time, peak RSS
-    "samples.csv.gz": ["run", "benchmark", "process", "time_ms", "gc_ms", "max_rss_mb"],
+    "samples.csv": ["run", "benchmark", "process", "time_ms", "gc_ms", "max_rss_mb"],
     # one row per benchmark and category: share of samples in execute()
-    "profiles.csv.gz": ["run", "benchmark", "category", "share"],
+    "profiles.csv": ["run", "benchmark", "category", "share"],
 }
 
 
 def _header(path: Path) -> list[str]:
-    opener = gzip.open if path.suffix == ".gz" else open
-    with opener(path, "rt", newline="") as f:
+    with open(path, newline="") as f:
         return next(csv.reader(f), [])
 
 

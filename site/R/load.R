@@ -23,9 +23,6 @@ results_dir <- function() {
 
 cache_path <- function() file.path(site_root(), "data", "_cache", "site.rds")
 
-# read.csv opens and closes an unopened connection itself
-read_gz <- function(path) utils::read.csv(gzfile(path), stringsAsFactors = FALSE)
-
 #' Read the results index and derive everything the pages need. Called once by
 #' the pre-render step; pages call site_data(), which reads the cache.
 build_cache <- function() {
@@ -37,8 +34,8 @@ build_cache <- function() {
   benchmarks <- utils::read.csv(file.path(dir, "benchmarks.csv"), stringsAsFactors = FALSE)
   events <- utils::read.csv(file.path(dir, "events.csv"), stringsAsFactors = FALSE)
   events$date <- as.Date(events$date)
-  samples <- read_gz(file.path(dir, "samples.csv.gz"))
-  profiles <- read_gz(file.path(dir, "profiles.csv.gz"))
+  samples <- utils::read.csv(file.path(dir, "samples.csv"), stringsAsFactors = FALSE)
+  profiles <- utils::read.csv(file.path(dir, "profiles.csv"), stringsAsFactors = FALSE)
 
   est <- estimate_runs(samples)
 

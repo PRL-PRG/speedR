@@ -1,4 +1,4 @@
-"""speedR's profile pass: r-benchmarks' rbench_perf app with speedR's R
+"""speedR's profile pass: r-benchmarks' rbench.perf app with speedR's R
 command and the VMIL26 recording settings (see common.py).
 
 Always pass --dir: the R process's stdout, which carries the MARK lines the
@@ -8,11 +8,11 @@ reduce step needs, is only written by the dir reporter.
 from dataclasses import field
 
 import common
-import rbench_perf as rp
+import rbench.perf as rp
 from bench import ByBenchmarkMetricSummary, Context, FixedRuns, Params, SystemProbe, Time, bench_app
 
 # VMIL26's recipe, which perf-rules.R was validated with. r-benchmarks'
-# rbench_perf defaults are 1999 Hz, a 16 kB stack dump and 1 recording.
+# rbench.perf defaults are 1999 Hz, a 16 kB stack dump and 1 recording.
 PERF = {"freq": 999, "stack_size": 32768, "recordings": 5}
 
 
@@ -35,7 +35,7 @@ def command(ctx: Context[Params]) -> list[str]:
     return common.r_command(p.R, rp.PERF_SUBFOLDER / "harness_instrument.R", args)
 
 
-# rbench_perf.INSTRUMENT_APP's parts, put together again: its suites leave
+# rbench.perf.INSTRUMENT_APP's parts, put together again: its suites leave
 # R_LIBS empty (rbench.DEFAULT_APP sets it to the package library), and
 # environment set on the app cannot override what the suites set.
 APP = (

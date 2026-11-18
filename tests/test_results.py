@@ -1,4 +1,3 @@
-import gzip
 import json
 import shutil
 from pathlib import Path
@@ -11,13 +10,7 @@ EXAMPLE = Path(__file__).parent / "data" / "meta-example.json"
 def make_checkout(root: Path) -> None:
     (root / "index").mkdir(parents=True)
     for name, cols in results.INDEX_TABLES.items():
-        text = ",".join(cols) + "\n"
-        path = root / "index" / name
-        if name.endswith(".gz"):
-            with gzip.open(path, "wt") as f:
-                f.write(text)
-        else:
-            path.write_text(text)
+        (root / "index" / name).write_text(",".join(cols) + "\n")
     m = json.loads(EXAMPLE.read_text())
     run = root / "runs" / m["machine"] / m["impl"] / m["version"] / m["config"] / m["run_id"]
     run.mkdir(parents=True)
