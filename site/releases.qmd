@@ -1,0 +1,94 @@
+---
+title: "Releases"
+subtitle: "Every GNU R release since 3.0.0, benchmark by benchmark"
+---
+
+```{r}
+#| include: false
+source("R/site.R")
+heat_for <- function(mm) {
+  base <- D$baselines[[mm]]
+  r <- D$runs[D$runs$machine == mm & D$runs$kind == "release" & D$runs$config == "default", ]
+  r <- r[order(r$date), ]
+  e <- D$est[D$est$run %in% r$run, ]
+  e$version <- r$version[match(e$run, r$run)]
+  e$date <- r$date[match(e$run, r$run)]
+  # reference: the machine's baseline release, or, for a benchmark that needs a
+  # newer R, the first release it runs on
+  base_date <- r$date[r$run == base$run]
+  ref <- do.call(rbind, lapply(split(e, e$benchmark), function(x) {
+    x <- x[order(x$date), ]
+    i <- if (any(x$run == base$run)) which(x$run == base$run) else which(x$date >= base_date)[1]
+    if (is.na(i)) i <- 1
+    data.frame(benchmark = x$benchmark[1], log_mean_base = x$log_mean[i], ref_version = x$version[i])
+  }))
+  e <- merge(e, ref, by = "benchmark")
+  e$speedup <- exp(e$log_mean_base - e$log_mean)
+  bm <- D$benchmarks[order(match(D$benchmarks$suite, SUITES), D$benchmarks$name), ]
+  z <- matrix(NA_real_, nrow(bm), nrow(r), dimnames = list(bm$id, r$version))
+  z[cbind(match(e$benchmark, bm$id), match(e$version, r$version))] <- e$speedup
+  refv <- setNames(ref$ref_version, ref$benchmark)[bm$id]
+  hover <- matrix(sprintf("<b>%s</b><br>R %s: %s vs R %s%s",
+                          rep(bm$id, ncol(z)), rep(r$version, each = nrow(z)),
+                          fmt_speedup(as.vector(z)), rep(refv, ncol(z)),
+                          ifelse(rep(refv, ncol(z)) != base$version, " (first release it runs on)", "")), nrow(z))
+  hover[is.na(z)] <- sprintf("<b>%s</b><br>R %s: not supported",
+                             rep(bm$id, ncol(z)), rep(r$version, each = nrow(z)))[is.na(z)]
+  zl <- pmax(pmin(log2(z), 1), -1)
+  # outline the columns of the R versions shipped in an Ubuntu LTS
+  lts_cols <- lapply(which(is_lts(r$version)), function(j) list(
+    type = "rect", xref = "x", yref = "paper", x0 = j - 1.5, x1 = j - 0.5, y0 = 0, y1 = 1,
+    line = list(color = LIGHT[["ink"]], width = 1.5), fillcolor = "rgba(0,0,0,0)"))
+  plot_ly(x = r$version, y = bm$id, z = zl, type = "heatmap", text = hover, hoverinfo = "text",
+          colorscale = diverging_scale(), zmin = -1, zmax = 1, xgap = 1, ygap = 1,
+          height = 16 * nrow(bm) + 140,
+          colorbar = list(title = list(text = "vs baseline", font = list(color = LIGHT[["ink2"]])),
+                          tickvals = c(-1, -0.5, 0, 0.5, 1),
+                          ticktext = c("≤0.5×", "0.71×", "1×", "1.41×", "≥2×"),
+                          tickfont = list(color = LIGHT[["muted"]]), outlinewidth = 0,
+                          len = 300, lenmode = "pixels", y = 1, yanchor = "top")) |>
+    rs_layout(x = ax(NULL, type = "category", side = "top", tickangle = -60, showline = FALSE, showgrid = FALSE,
+                     tickvals = r$version,
+                     ticktext = ifelse(is_lts(r$version), paste0("<b>◆ ", r$version, "</b>"), r$version)),
+              y = ax(NULL, type = "category", autorange = "reversed", showline = FALSE, showgrid = FALSE,
+                     tickfont = list(size = 10, color = LIGHT[["ink2"]])),
+              legend = FALSE) |>
+    layout(margin = list(l = 10, r = 10, t = 10, b = 10), shapes = lts_cols) |>
+    config(displayModeBar = FALSE)
+}
+```
+
+```{r}
+div(class = "rs-card",
+  div(class = "rs-card-title", "Speedup per benchmark and release"),
+  div(class = "rs-card-sub", "Blue faster, red slower than the baseline; empty: cannot run. ◆ R in an Ubuntu LTS."),
+  machine_tabs(D$machines$machine, heat_for)
+)
+```
+
+## Release by release
+
+```{r}
+m <- REF_MACHINE
+tl <- D$release_timeline[D$release_timeline$machine == m, ]
+tl <- tl[order(tl$date), ]
+tl$prev <- c(NA, utils::head(tl$speedup, -1))
+tl$vs_prev <- tl$speedup / tl$prev
+tab <- data.frame(
+  Release = ifelse(is_lts(tl$version), paste0("<b>", tl$version, "</b>"), tl$version),
+  `Ubuntu LTS` = ifelse(is_lts(tl$version), paste("◆", lts_name(tl$version)), ""),
+  Date = fmt_date(tl$date),
+  `vs baseline` = fmt_speedup(tl$speedup),
+  `95% CI` = paste(fmt_speedup(tl$lo, 3), "–", fmt_speedup(tl$hi, 3)),
+  `vs previous release` = ifelse(is.na(tl$vs_prev), "–", paste(fmt_speedup(tl$vs_prev, 3))),
+  Benchmarks = paste0(tl$n_ok, " / ", tl$n_total),
+  check.names = FALSE)
+tab <- tab[rev(seq_len(nrow(tab))), ]
+rs_table(tab, defaultPageSize = 20, columns = list(Release = colDef(html = TRUE)),
+         rowStyle = function(i) if (is_lts(tl$version[rev(seq_len(nrow(tl)))][i])) list(fontWeight = 600))
+```
+
+::: {.rs-notes}
+- Colour is capped at 0.5× and 2×. A benchmark that needs a newer R than the baseline is compared with the first release it runs on; an empty cell means it needs a newer R or a package that is not available.
+- The table is for `r machine_label(REF_MACHINE)`. *Benchmarks* counts the programs that ran on that release; the geometric mean uses only the `r D$release_timeline$n[D$release_timeline$machine == REF_MACHINE][1]` every release can run.
+:::

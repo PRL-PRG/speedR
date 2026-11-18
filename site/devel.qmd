@@ -1,0 +1,98 @@
+---
+title: "R-devel"
+subtitle: "Every night, the newest R-devel revision against the latest release"
+---
+
+```{r}
+#| include: false
+source("R/site.R")
+m <- REF_MACHINE
+dtl <- D$devel_timeline[D$devel_timeline$machine == m, ]
+dtl <- dtl[order(dtl$date), ]
+rel <- D$runs[D$runs$machine == m & D$runs$kind == "release" & D$runs$config == "default", ]
+lr <- rel[which.max(rel$date), ]
+nights <- devel_nights(D$changes)
+ev <- D$events[D$events$machine == m & D$events$date >= min(dtl$date), ]
+last <- dtl[nrow(dtl), ]
+```
+
+```{r}
+tiles(
+  tile(paste0("Tonight vs R ", lr$version), fmt_speedup(last$speedup),
+       paste0("r", last$svn_rev, " · ", fmt_date(last$date))),
+  tile("Nights measured", nrow(dtl), paste(fmt_date(min(dtl$date)), "–", fmt_date(max(dtl$date)))),
+  tile("Nights with changes", nrow(nights), sprintf("%d faster · %d slower · %d not final",
+       sum(nights$kind == "faster"), sum(nights$kind == "slower"), sum(nights$kind == "pending"))),
+  tile("Suspect sessions", sum(dtl$suspect), "sentinel drift > 3%; excluded from detection")
+)
+```
+
+```{r}
+hover <- sprintf("<b>r%s</b> · %s<br>%s vs R %s (95%% CI %s–%s)%s",
+                 dtl$svn_rev, fmt_date(dtl$date), fmt_speedup(dtl$speedup, 3), lr$version,
+                 fmt_speedup(dtl$lo, 3), fmt_speedup(dtl$hi, 3),
+                 ifelse(dtl$suspect, "<br>⚠ suspect session (sentinel drift)", ""))
+good <- dtl[!dtl$suspect, ]
+p <- plot_ly(dtl, x = ~date, height = 380) |>
+  add_ribbons(data = good, ymin = ~lo, ymax = ~hi, fillcolor = LIGHT[["band"]], line = list(width = 0),
+              hoverinfo = "skip", showlegend = FALSE) |>
+  add_lines(data = good, y = ~speedup, line = list(color = LIGHT[["series1"]], width = 2),
+            hoverinfo = "skip", showlegend = FALSE) |>
+  add_markers(data = dtl, y = ~speedup, text = hover, hoverinfo = "text", showlegend = FALSE,
+              marker = list(size = ifelse(dtl$suspect, 11, 6),
+                            symbol = ifelse(dtl$suspect, "x-thin-open", "circle"),
+                            color = ifelse(dtl$suspect, LIGHT[["ink"]], LIGHT[["series1"]]),
+                            line = list(width = ifelse(dtl$suspect, 2, 0), color = LIGHT[["ink"]])))
+fl <- merge(nights, data.frame(run = dtl$run, speedup_night = dtl$speedup), by = "run")
+if (nrow(fl)) {
+  p <- p |> add_markers(data = fl, x = ~date, y = ~speedup_night, showlegend = FALSE,
+    marker = list(size = 13, symbol = ifelse(fl$kind == "slower", "triangle-down", "triangle-up"),
+                  color = LIGHT[["ink"]], line = list(color = LIGHT[["surface"]], width = 2)),
+    text = sprintf("<b>r%s</b>: %d benchmark(s) changed<br>largest %s", fl$svn_rev, fl$n, fmt_change(fl$worst)),
+    hoverinfo = "text")
+}
+shapes <- c(
+  list(list(type = "line", xref = "paper", x0 = 0, x1 = 1, y0 = 1, y1 = 1,
+            line = list(color = LIGHT[["axis"]], width = 1))),
+  lapply(seq_len(nrow(ev)), function(i) list(type = "line", yref = "paper", y0 = 0, y1 = 1,
+            x0 = ev$date[i], x1 = ev$date[i], line = list(color = LIGHT[["muted"]], width = 1))))
+ann <- lapply(seq_len(nrow(ev)), function(i) list(x = ev$date[i], yref = "paper", y = 1,
+            text = paste0("⚙ ", sub(" \\(.*", "", ev$event[i])), showarrow = FALSE, xanchor = "left",
+            yanchor = "top", xshift = 4, font = list(size = 11, color = LIGHT[["muted"]])))
+div(class = "rs-card",
+  div(class = "rs-card-title", paste("R-devel vs R", lr$version)),
+  div(class = "rs-card-sub", paste0("Geomean over all benchmarks, ", machine_label(m),
+      ". ▲▼ confirmed change · ✕ suspect session · ⚙ machine change.")),
+  rs_layout(p, x = ax(NULL, type = "date"), y = ax(paste("Speedup vs R", lr$version, "(×)"), tickformat = ".3f"),
+            legend = FALSE, shapes = shapes, annotations = ann)
+)
+```
+
+## Nights with changes
+
+```{r}
+prev_rev <- function(run) {
+  d <- dtl[order(dtl$date), ]
+  i <- match(run, d$run)
+  if (is.na(i) || i == 1) NA else d$svn_rev[i - 1]
+}
+nights$range <- vapply(seq_len(nrow(nights)), function(i) {
+  pr <- prev_rev(nights$run[i])
+  sprintf('<a href="https://github.com/r-devel/r-svn/commits/main">r%s–r%s</a>', pr + 1, nights$svn_rev[i])
+}, "")
+nights$status_html <- vapply(nights$kind, function(k) as.character(status(k)), "")
+rs_table(
+  data.frame(Night = fmt_date(nights$date), Commits = nights$range, Status = nights$status_html,
+             `Faster` = nights$faster, `Slower` = nights$slower,
+             `Largest change` = paste(fmt_speedup(nights$worst), "·", fmt_change(nights$worst)),
+             `Most affected` = nights$benchmarks, check.names = FALSE),
+  columns = list(Commits = colDef(html = TRUE), Status = colDef(html = TRUE),
+                 `Most affected` = colDef(minWidth = 280)),
+  pagination = FALSE
+)
+```
+
+::: {.rs-notes}
+- A benchmark is flagged when its time moves more than 2% and outside its 95% interval relative to the median of the previous seven good nights, and the next three nights confirm it. Until then the night is *not final yet*.
+- Commit ranges link to [r-devel/r-svn](https://github.com/r-devel/r-svn).
+:::

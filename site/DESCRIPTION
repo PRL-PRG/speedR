@@ -1,0 +1,16 @@
+Package: speedrsite
+Title: The speedR Dashboard
+Version: 0.1.0
+Description: Not a package: declares what rendering the Quarto site in this
+    directory needs, so CI (and `pak::local_install_deps()`) can install it.
+License: MIT + file ../LICENSE
+Encoding: UTF-8
+Depends: R (>= 4.3)
+Imports:
+    curl,
+    htmltools,
+    jsonlite,
+    knitr,
+    plotly,
+    reactable,
+    rmarkdown

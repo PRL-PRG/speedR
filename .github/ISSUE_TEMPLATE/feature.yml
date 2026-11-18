@@ -1,0 +1,21 @@
+name: Feature or change
+description: A new view, configuration, platform, or pipeline change
+labels: [enhancement]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What and why
+      description: The problem this solves, and who it helps.
+    validations:
+      required: true
+  - type: textarea
+    id: how
+    attributes:
+      label: Proposed approach (optional)
+  - type: checkboxes
+    id: numbers
+    attributes:
+      label: Effect on measurements
+      options:
+        - label: This could change measured numbers (run design, build flags, toolchain, rules). See CONTRIBUTING.md.

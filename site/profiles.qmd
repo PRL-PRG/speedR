@@ -1,0 +1,97 @@
+---
+title: "Profiles"
+subtitle: "Where the interpreter spends its time"
+---
+
+```{r}
+#| include: false
+source("R/site.R")
+m <- REF_MACHINE
+pr <- merge(D$profiles, D$runs[, c("run", "machine", "version", "kind", "config", "date")], by = "run")
+pr <- pr[pr$kind == "release", ]
+latest_run <- function(mm) {
+  r <- D$runs[D$runs$machine == mm & D$runs$kind == "release" & D$runs$config == "default", ]
+  r[which.max(r$date), ]
+}
+```
+
+```{r}
+suite_share <- function(mm) {
+  d <- pr[pr$machine == mm, ]
+  # mean over benchmarks of each benchmark's group share: every benchmark counts once
+  g <- aggregate(share ~ run + benchmark + version + date + group, data = d, FUN = sum)
+  g <- aggregate(share ~ version + date + group, data = g, FUN = mean)
+  g <- g[order(g$date), ]
+  g$version <- factor(g$version, levels = unique(g$version))
+  plot_group_stack(g, "version", height = 340)
+}
+div(class = "rs-card",
+  div(class = "rs-card-title", "Across releases, whole corpus"),
+  div(class = "rs-card-sub", "Mean over benchmarks, so long benchmarks do not dominate."),
+  machine_tabs(D$machines$machine, suite_share)
+)
+```
+
+```{r}
+heat <- function(mm) {
+  lr <- latest_run(mm)
+  d <- pr[pr$run == lr$run, ]
+  bm <- D$benchmarks[order(match(D$benchmarks$suite, SUITES), D$benchmarks$name), ]
+  bm <- bm[bm$id %in% d$benchmark, ]
+  cats <- CATEGORIES$category
+  z <- matrix(0, nrow(bm), length(cats), dimnames = list(bm$id, cats))
+  z[cbind(match(d$benchmark, bm$id), match(d$category, cats))] <- d$share
+  hover <- matrix(sprintf("<b>%s</b><br>%s: %.1f%%", rep(bm$id, length(cats)),
+                          rep(cats, each = nrow(bm)), 100 * as.vector(z)), nrow(bm))
+  plot_ly(x = cats, y = bm$id, z = z, type = "heatmap", text = hover, hoverinfo = "text",
+          colorscale = sequential_scale(), zmin = 0, zmax = 0.8, xgap = 1, ygap = 1,
+          height = 15 * nrow(bm) + 130,
+          colorbar = list(title = list(text = "share", font = list(color = LIGHT[["ink2"]])),
+                          tickformat = ".0%", tickfont = list(color = LIGHT[["muted"]]), outlinewidth = 0,
+                          len = 300, lenmode = "pixels", y = 1, yanchor = "top")) |>
+    rs_layout(x = ax(NULL, type = "category", side = "top", showline = FALSE, showgrid = FALSE),
+              y = ax(NULL, type = "category", autorange = "reversed", showline = FALSE, showgrid = FALSE,
+                     tickfont = list(size = 10, color = LIGHT[["ink2"]])), legend = FALSE) |>
+    layout(margin = list(l = 10, r = 10, t = 10, b = 10)) |>
+    config(displayModeBar = FALSE)
+}
+div(class = "rs-card",
+  div(class = "rs-card-title", "Every benchmark, every category (latest release)"),
+  div(class = "rs-card-sub", "Darker: larger share. Saturates at 80%."),
+  machine_tabs(D$machines$machine, heat)
+)
+```
+
+## Table view
+
+```{r}
+lr <- latest_run(m)
+d <- pr[pr$run == lr$run, ]
+w <- stats::reshape(d[, c("benchmark", "category", "share")], idvar = "benchmark",
+                    timevar = "category", direction = "wide")
+names(w) <- sub("^share\\.", "", names(w))
+w <- w[, c("benchmark", CATEGORIES$category)]
+w$suite <- D$benchmarks$suite[match(w$benchmark, D$benchmarks$id)]
+w <- w[, c("suite", "benchmark", CATEGORIES$category)]
+pct <- function(x) sprintf("%.1f%%", 100 * x)
+cols <- lapply(CATEGORIES$category, function(c) colDef(cell = function(v) pct(v), minWidth = 72))
+names(cols) <- CATEGORIES$category
+p(class = "rs-muted", paste0("R ", lr$version, " · ", machine_label(m)))
+rs_table(w, searchable = TRUE, defaultPageSize = 20,
+         columns = c(list(suite = colDef(minWidth = 110), benchmark = colDef(minWidth = 230,
+           cell = function(v) tags$a(href = bench_url(v), v))), cols))
+```
+
+## Categories
+
+```{r}
+cat_def <- CATEGORIES
+rs_table(data.frame(Category = cat_def$category, Group = cat_def$group,
+                    `What it covers` = cat_def$description, check.names = FALSE),
+         pagination = FALSE, sortable = FALSE, columns = list(`What it covers` = colDef(minWidth = 320)))
+```
+
+::: {.rs-notes}
+- Each benchmark is recorded with `perf record` (DWARF call graphs, about 1000 samples per second, 5 recordings). Each sample inside `execute()` is charged to the innermost frame the [category rules](methodology.qmd#profiles) of *What Do R Benchmarks Measure?* (VMIL'26) recognise.
+- Charts colour the four category groups; the ten categories are named in the heatmap and tables, because ten colours cannot be told apart reliably.
+:::

@@ -1,0 +1,52 @@
+---
+title: "Benchmarks"
+subtitle: "The corpus: 118 programs in 8 suites from PRL-PRG/r-benchmarks"
+---
+
+```{r}
+#| include: false
+source("R/site.R")
+m <- REF_MACHINE
+r <- D$runs[D$runs$machine == m & D$runs$kind == "release" & D$runs$config == "default", ]
+lr <- r[which.max(r$date), ]
+base <- D$baselines[[m]]
+e_last <- D$est[D$est$run == lr$run, ]
+e_base <- D$est[D$est$run == base$run, ]
+sp <- speedups(e_base, e_last)
+pl <- D$profiles[D$profiles$run == lr$run, ]
+top <- do.call(rbind, lapply(split(pl, pl$benchmark), function(x) x[which.max(x$share), ]))
+nchg <- table(D$changes$benchmark)
+```
+
+```{r}
+b <- D$benchmarks
+tab <- data.frame(
+  suite = b$suite,
+  benchmark = b$id,
+  min_r = b$min_version,
+  t_base = e_base$est_ms[match(b$id, e_base$benchmark)],
+  t_last = e_last$est_ms[match(b$id, e_last$benchmark)],
+  speedup = sp$speedup[match(b$id, sp$benchmark)],
+  top = top$category[match(b$id, top$benchmark)],
+  top_share = top$share[match(b$id, top$benchmark)],
+  devel = as.integer(ifelse(is.na(nchg[b$id]), 0, nchg[b$id])),
+  stringsAsFactors = FALSE)
+rs_table(tab, searchable = TRUE, defaultPageSize = 25,
+  defaultSorted = list(suite = "asc"),
+  columns = list(
+    suite = colDef(name = "Suite", minWidth = 110),
+    benchmark = colDef(name = "Benchmark", minWidth = 240,
+      cell = function(v) tags$a(href = paste0(gsub("/", "--", v, fixed = TRUE), ".html"), sub("^[^/]+/", "", v))),
+    min_r = colDef(name = "Needs R", minWidth = 80),
+    t_base = colDef(name = paste("R", base$version), cell = function(v) fmt_ms(v), minWidth = 90),
+    t_last = colDef(name = paste("R", lr$version), cell = function(v) fmt_ms(v), minWidth = 90),
+    speedup = colDef(name = "Speedup", cell = function(v) fmt_speedup(v), minWidth = 85),
+    top = colDef(name = "Most time in", minWidth = 120),
+    top_share = colDef(name = "share", cell = function(v) sprintf("%.0f%%", 100 * v), minWidth = 70),
+    devel = colDef(name = "R-devel changes", minWidth = 95)
+  ))
+```
+
+::: {.rs-notes}
+- Each benchmark is one R file defining `execute(size)`, run by the shared harness. Sources, sizes and provenance are in [PRL-PRG/r-benchmarks](https://github.com/PRL-PRG/r-benchmarks).
+:::

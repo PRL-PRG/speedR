@@ -1,0 +1,32 @@
+---
+title: "Implementations"
+subtitle: "GNU R next to other R virtual machines"
+---
+
+```{r}
+#| include: false
+source("R/site.R")
+```
+
+```{r}
+div(class = "rs-empty", tags$strong("Only GNU R is measured so far."))
+```
+
+## Planned
+
+```{r}
+rs_table(data.frame(
+  Implementation = c("GNU R", "rcp", "Ř (PIR)", "FastR"),
+  Kind = c("reference interpreter (AST + byte code)", "copy-and-patch JIT (R package on a patched GNU R)",
+           "optimising JIT", "GraalVM / Truffle"),
+  `Base GNU R` = c("–", "4.x (same as the patched tree)", "4.1.1 (pinned image)", "own"),
+  Driver = c("drivers/timing.py", "to be written", "to be written", "to be written"),
+  Status = c(as.character(status("validated")), "planned", "planned", "planned"),
+  check.names = FALSE),
+  columns = list(Status = colDef(html = TRUE)), pagination = FALSE, sortable = FALSE)
+```
+
+::: {.rs-notes}
+- Each implementation will be compared with its own versions and options, and with the GNU R release it is built on, using the same benchmarks, machine and harness.
+- Every driver builds on r-benchmarks' `rbench` module, so an implementation changes only what makes it different (its command line, harness or environment) and the rest of the measurement is the same.
+:::

@@ -1,0 +1,40 @@
+# Build configurations. Every build starts from the same base, which the
+# builder owns (phase 2):
+#
+#   ./configure --prefix=/opt/r/<build_id> --without-recommended-packages \
+#               --with-x=no --with-blas=-lopenblas --with-lapack=-lopenblas
+#   CFLAGS=CXXFLAGS=FFLAGS=FCFLAGS="-O2 -g"
+#
+# with every BLAS/OpenMP thread count pinned to 1 at run time. A config adds
+# configure arguments, replaces the compiler flags, or sets run-time
+# environment. `planned` configs are listed so the dashboard and the grant
+# milestones can refer to them; the pipeline only builds `active` ones.
+
+[default]
+description = "Vanilla build: -O2 -g, OpenBLAS linked by name, single-threaded"
+status = "active"
+
+[refblas]
+description = "R's reference BLAS instead of OpenBLAS"
+configure = ["--without-blas", "--without-lapack"]
+
+[no-bytecode]
+description = "Same binary as default, byte-code compiler and JIT off"
+env = { R_ENABLE_JIT = "0", R_DISABLE_BYTECODE = "true" }
+
+[lto]
+description = "Link-time optimisation"
+configure = ["--enable-lto"]
+
+[gc-a]
+description = "Garbage-collector parameter set A (values to be decided)"
+
+[gc-b]
+description = "Garbage-collector parameter set B (values to be decided)"
+
+[pgo]
+description = "Profile-guided optimisation (grant milestone M5)"
+
+[cran-binary]
+description = "The official CRAN installer, as most macOS and Windows users get R"
+platforms = ["macos", "windows"]

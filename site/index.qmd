@@ -1,0 +1,55 @@
+---
+title: "How fast is R?"
+---
+
+```{r}
+#| include: false
+source("R/site.R")
+m <- REF_MACHINE
+tl <- D$release_timeline[D$release_timeline$machine == m, ]
+tl <- tl[order(tl$date), ]
+base_v <- D$baselines[[m]]$version
+```
+
+```{r}
+div(class = "rs-card",
+  div(class = "rs-card-title", "Speedup across releases"),
+  div(class = "rs-card-sub",
+      sprintf("Geometric mean over %d benchmarks; higher is faster.", tl$n[1])),
+  machine_tabs(D$machines$machine, function(mm) {
+    t <- D$release_timeline[D$release_timeline$machine == mm, ]
+    plot_release_timeline(t, D$baselines[[mm]]$version)
+  })
+)
+```
+
+```{r}
+st <- D$suite_timeline[D$suite_timeline$machine == m, ]
+div(class = "rs-card",
+  div(class = "rs-card-title", "By suite"),
+  div(class = "rs-card-sub", machine_label(m)),
+  plot_suite_lines(st, base_v, height = 340)
+)
+```
+
+## Recent changes in R-devel
+
+```{r}
+nights <- utils::head(devel_nights(D$changes), 5)
+nights$status <- vapply(nights$kind, function(k) as.character(status(k)), "")
+rs_table(
+  data.frame(Night = fmt_date(nights$date), Revision = paste0("r", nights$svn_rev),
+             Status = nights$status, Benchmarks = nights$n,
+             `Largest change` = paste(fmt_speedup(nights$worst), "·", fmt_change(nights$worst)),
+             check.names = FALSE),
+  columns = list(Status = colDef(html = TRUE)),
+  pagination = FALSE
+)
+```
+
+[All R-devel nights →](devel.qmd)
+
+::: {.rs-notes}
+- `r nrow(D$benchmarks)` benchmarks, every R release since 3.0.0 and every night of R-devel, on dedicated machines.
+- 1× is **R `r base_v`**, the R in `r lts_name(base_v)` LTS, on the same machine. The geometric mean uses only benchmarks every release can run. [Methodology](methodology.qmd)
+:::

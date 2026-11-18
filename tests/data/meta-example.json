@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "run_id": "20261111T093000Z-3f9a1c",
+  "machine": "prl-bench-x64-1",
+  "impl": "gnur",
+  "version": "4.5.2",
+  "kind": "release",
+  "svn_rev": 88974,
+  "config": "default",
+  "build": {
+    "id": "0123456789abcdef",
+    "source": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "flags": {"CFLAGS": "-O2 -g"},
+    "toolchain": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "blas": "openblas",
+    "cached": false
+  },
+  "suite": {
+    "repo": "https://github.com/PRL-PRG/r-benchmarks",
+    "commit": "4fb41d2000000000000000000000000000000000",
+    "bench_commit": "4639a83000000000000000000000000000000000",
+    "benchmarks": 118,
+    "unsupported": []
+  },
+  "run_design": {"runs": 5, "iterations": 4, "warmups": 1, "seed": 20260810, "cpuset": "2-7", "aslr": false},
+  "host": {
+    "kernel": "6.17.0-27-generic",
+    "cmdline": "isolcpus=2-7 nohz_full=2-7 rcu_nocbs=2-7",
+    "boot_id": "5c1d0e0e-0000-0000-0000-000000000000",
+    "uptime_s": 312,
+    "wake": "wol",
+    "doctor": {"passed": true}
+  },
+  "sentinel": {"benchmark": "areWeFast/mandelbrot", "time_ms": 812.4, "median_ms": 809.9, "drift": 0.0031, "suspect": false},
+  "started": "2026-11-11T09:30:00Z",
+  "finished": "2026-11-11T11:12:41Z",
+  "passes": ["timing", "profile"],
+  "profile": {"profiler": "perf", "rules_version": "vmil26-8b42516", "frequency_hz": 999,
+              "call_graph": "dwarf,32768", "recordings": 5, "unattributed_share": 0.021},
+  "workflow": {"repository": "PRL-PRG/speedR", "run_id": 1, "sha": "0000000"}
+}

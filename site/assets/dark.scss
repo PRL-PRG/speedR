@@ -1,0 +1,42 @@
+/*-- scss:defaults --*/
+$font-family-sans-serif: system-ui, -apple-system, "Segoe UI", sans-serif;
+$body-bg: #0d0d0d;
+$body-color: #f0efec;
+$primary: #3987e5;
+$link-color: #86b6ef;
+$navbar-bg: #1a1a19;
+$navbar-fg: #f0efec;
+$navbar-hl: #86b6ef;
+$border-color: #2c2c2a;
+$code-color: #f0efec;
+$code-bg: #2c2c2a;
+$footer-bg: #0d0d0d;
+
+/*-- scss:rules --*/
+:root {
+  --rs-page: #0d0d0d;
+  --rs-surface: #1a1a19;
+  --rs-ink: #f0efec;
+  --rs-ink2: #c3c2b7;
+  --rs-muted: #8f8d86;
+  --rs-grid: #2c2c2a;
+  --rs-axis: #383835;
+  --rs-ring: rgba(255, 255, 255, 0.10);
+  --rs-stripe: rgba(255, 255, 255, 0.03);
+  --rs-hover: rgba(57, 135, 229, 0.12);
+  --rs-series1: #3987e5;
+  --rs-series2: #d95926;
+  --rs-series3: #199e70;
+  --rs-series7: #9085e9;
+  --rs-neutral: #5f5e59;
+  --rs-fast: #86b6ef;
+  --rs-slow: #f08c84;
+  --rs-good: #0ca30c;
+  --rs-good-bg: rgba(12, 163, 12, 0.16);
+  --rs-warning: #fab219;
+  --rs-warning-bg: rgba(250, 178, 25, 0.14);
+  --rs-critical: #f08c84;
+  --rs-critical-bg: rgba(208, 59, 59, 0.18);
+  --rs-banner-bg: #3a2c05;
+  --rs-banner-ink: #fbe3a6;
+}

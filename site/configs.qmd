@@ -1,0 +1,79 @@
+---
+title: "Configurations"
+subtitle: "How build and runtime options change R's speed"
+---
+
+```{r}
+#| include: false
+source("R/site.R")
+m <- REF_MACHINE
+r <- D$runs[D$runs$machine == m & D$runs$kind == "release", ]
+cfg_versions <- sort(unique(r$version[r$config != "default"]))
+cfg_versions <- cfg_versions[order(version_key <- vapply(strsplit(cfg_versions, ".", fixed = TRUE),
+                                     function(x) sum(as.integer(x) * c(1e4, 1e2, 1)), 0))]
+eff <- do.call(rbind, lapply(cfg_versions, function(v) {
+  def <- r$run[r$version == v & r$config == "default"]
+  others <- r[r$version == v & r$config != "default", ]
+  do.call(rbind, lapply(seq_len(nrow(others)), function(i) {
+    g <- geomean_speedup(speedups(D$est[D$est$run == def, ], D$est[D$est$run == others$run[i], ]))
+    cbind(data.frame(version = v, date = others$date[i], config = others$config[i]), g)
+  }))
+}))
+```
+
+```{r}
+cfg_def <- data.frame(
+  Configuration = c("default", "no-bytecode", "lto", "gc-a", "gc-b", "pgo", "refblas"),
+  Kind = c("build", "build + runtime", "build", "runtime", "runtime", "build", "build"),
+  `What changes` = c(
+    "-O2 -g, byte-compiled base packages, JIT level 3, OpenBLAS (single thread)",
+    "--disable-byte-compiled-packages and R_ENABLE_JIT=0: the AST interpreter only",
+    "--enable-lto: link-time optimisation of the interpreter",
+    "GC tuning A: larger initial heap (R_NSize / R_VSize) [values to be agreed]",
+    "GC tuning B: aggressive growth (R_GC_MEM_GROW) [values to be agreed]",
+    "--enable-pgo: profile-guided build trained on the PGO training set (grant milestone M5)",
+    "R's bundled reference BLAS/LAPACK instead of OpenBLAS"),
+  check.names = FALSE)
+rs_table(cfg_def, pagination = FALSE, sortable = FALSE,
+         columns = list(`What changes` = colDef(minWidth = 420)))
+```
+
+```{r}
+p <- plot_ly(height = 400)
+for (cfg in intersect(CONFIGS, unique(eff$config))) {
+  d <- eff[eff$config == cfg, ]
+  d <- d[order(d$date), ]
+  hover <- sprintf("<b>%s</b> on R %s<br>%s vs default (95%% CI %s–%s)", cfg, d$version,
+                   fmt_speedup(d$speedup, 3), fmt_speedup(d$lo, 3), fmt_speedup(d$hi, 3))
+  p <- p |> add_trace(data = d, x = ~version, y = ~speedup, type = "scatter",
+                      mode = if (nrow(d) > 1) "lines+markers" else "markers", name = cfg,
+                      line = list(color = CONFIG_COLORS[[cfg]], width = 2),
+                      marker = list(color = CONFIG_COLORS[[cfg]], size = 9,
+                                    line = list(color = LIGHT[["surface"]], width = 2)),
+                      text = hover, hoverinfo = "text")
+}
+div(class = "rs-card",
+  div(class = "rs-card-title", "Effect of each option, by release"),
+  div(class = "rs-card-sub", paste0("Geomean speedup over the default build (", machine_label(m), "); below 1× the option makes R slower.")),
+  rs_layout(p, x = ax(NULL, type = "category", categoryorder = "array", categoryarray = cfg_versions),
+            y = ax("Speedup vs default build (×)", type = "log", tickformat = ".2f"),
+            shapes = list(list(type = "line", xref = "paper", x0 = 0, x1 = 1, y0 = 1, y1 = 1,
+                               line = list(color = LIGHT[["axis"]], width = 1))))
+)
+```
+
+## Table view
+
+```{r}
+w <- stats::reshape(eff[, c("version", "config", "speedup")], idvar = "version", timevar = "config",
+                    direction = "wide")
+names(w) <- sub("^speedup\\.", "", names(w))
+w <- w[match(rev(cfg_versions), w$version), ]
+cols <- lapply(setdiff(names(w), "version"), function(c) colDef(cell = function(v) fmt_speedup(v, 3)))
+names(cols) <- setdiff(names(w), "version")
+rs_table(w, pagination = FALSE, columns = c(list(version = colDef(name = "Release")), cols))
+```
+
+::: {.rs-notes}
+- Each configuration is compared with the default build of the same release on the same machine, so the numbers show only the effect of the option.
+:::

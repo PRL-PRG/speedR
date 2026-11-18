@@ -1,0 +1,39 @@
+{
+ "executions": [
+  {
+   "suite": "shootout/nbody",
+   "benchmark": "nbody",
+   "variant": {
+    "pairs": []
+   },
+   "variant_label": "",
+   "run": 1,
+   "failure": null,
+   "iterations": []
+  },
+  {
+   "suite": "SpeedTest",
+   "benchmark": "prg/hmc/hmc1",
+   "variant": {
+    "pairs": []
+   },
+   "variant_label": "",
+   "run": 1,
+   "failure": null,
+   "iterations": []
+  },
+  {
+   "suite": "SpeedTest",
+   "benchmark": "prg/hmc/hmc1",
+   "variant": {
+    "pairs": []
+   },
+   "variant_label": "",
+   "run": 2,
+   "failure": "exit code 1",
+   "iterations": []
+  }
+ ],
+ "fingerprint": {},
+ "diagnostics": []
+}

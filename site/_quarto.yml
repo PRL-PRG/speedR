@@ -1,0 +1,73 @@
+project:
+  type: website
+  output-dir: _site
+  execute-dir: project
+  pre-render: Rscript R/prerender.R
+  render:
+    - "*.qmd"
+    - "benchmarks/*.qmd"
+    - "!_*.qmd"
+
+website:
+  title: "speedR"
+  description: "Performance of the GNU R interpreter across versions, configurations and platforms."
+  site-url: https://prl-prg.github.io/speedR/
+  repo-url: https://github.com/PRL-PRG/speedR
+  search:
+    location: navbar
+    type: overlay
+  navbar:
+    left:
+      - text: Overview
+        href: index.qmd
+      - text: Releases
+        href: releases.qmd
+      - text: Compare
+        href: compare.qmd
+      - text: R-devel
+        href: devel.qmd
+      - text: Profiles
+        href: profiles.qmd
+      - text: Benchmarks
+        href: benchmarks/index.qmd
+      - text: More
+        menu:
+          - text: Configurations
+            href: configs.qmd
+          - text: Platforms
+            href: platforms.qmd
+          - text: Implementations
+            href: implementations.qmd
+          - text: Machines
+            href: machines.qmd
+    right:
+      - text: Methodology
+        href: methodology.qmd
+      - icon: github
+        href: https://github.com/PRL-PRG/speedR
+        aria-label: GitHub
+  page-footer:
+    left: "Pipeline [MIT](https://github.com/PRL-PRG/speedR) · Results [CC0](https://github.com/PRL-PRG/speedR-results) · PRL-PRG, CTU & Charles University"
+    right: "Supported by an R Consortium ISC grant"
+
+format:
+  html:
+    theme:
+      light: [cosmo, assets/light.scss]
+      dark: [cosmo, assets/dark.scss]
+    css: assets/site.css
+    include-in-header: assets/_generated-head.html
+    include-before-body: assets/_banner.html
+    include-after-body: assets/_generated-after.html
+    toc: false
+    page-layout: full
+    grid:
+      body-width: 1200px
+    smooth-scroll: true
+    link-external-newwindow: true
+
+execute:
+  freeze: false
+  echo: false
+  warning: false
+  message: false

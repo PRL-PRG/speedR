@@ -1,0 +1,325 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/PRL-PRG/speedR/speedr/schema/meta.schema.json",
+  "title": "speedR run metadata (meta.json)",
+  "description": "Everything needed to interpret and reproduce one benchmarking session of one build on one machine. Stored next to the run's results in speedR-results.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "run_id",
+    "machine",
+    "impl",
+    "version",
+    "kind",
+    "config",
+    "build",
+    "suite",
+    "run_design",
+    "host",
+    "started",
+    "finished",
+    "passes"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{6}$"
+    },
+    "machine": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$"
+    },
+    "impl": {
+      "type": "string",
+      "description": "gnur now; later rcp, rsh, fastr",
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "version": {
+      "type": "string",
+      "description": "4.5.2 for a release, devel for R-devel",
+      "pattern": "^([0-9]+\\.[0-9]+\\.[0-9]+|devel)$"
+    },
+    "kind": {
+      "enum": [
+        "release",
+        "devel"
+      ]
+    },
+    "svn_rev": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "description": "R's SVN revision (R-devel and releases alike)"
+    },
+    "base_gnur_version": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "For other implementations: the GNU R they derive from"
+    },
+    "config": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "build": {
+      "type": "object",
+      "required": [
+        "id",
+        "source",
+        "flags",
+        "toolchain"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{16}$"
+        },
+        "source": {
+          "type": "string",
+          "description": "tarball sha256, or r<rev> for R-devel"
+        },
+        "flags": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "toolchain": {
+          "type": "string",
+          "description": "build image digest (Linux) or toolchain manifest hash"
+        },
+        "blas": {
+          "type": "string"
+        },
+        "cached": {
+          "type": "boolean"
+        }
+      }
+    },
+    "suite": {
+      "type": "object",
+      "required": [
+        "repo",
+        "commit",
+        "bench_commit"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "repo": {
+          "type": "string"
+        },
+        "commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$",
+          "description": "r-benchmarks commit (speedR's upstream.toml)"
+        },
+        "bench_commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$",
+          "description": "bench commit locked by r-benchmarks' uv.lock at that commit"
+        },
+        "benchmarks": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unsupported": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "run_design": {
+      "type": "object",
+      "required": [
+        "runs",
+        "iterations",
+        "warmups",
+        "seed"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "runs": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "iterations": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "warmups": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "seed": {
+          "type": "integer"
+        },
+        "cpuset": {
+          "type": "string"
+        },
+        "aslr": {
+          "type": "boolean"
+        }
+      }
+    },
+    "host": {
+      "type": "object",
+      "required": [
+        "kernel"
+      ],
+      "properties": {
+        "kernel": {
+          "type": "string"
+        },
+        "cmdline": {
+          "type": "string"
+        },
+        "os_release": {
+          "type": "string"
+        },
+        "boot_id": {
+          "type": "string"
+        },
+        "uptime_s": {
+          "type": "number",
+          "minimum": 0
+        },
+        "wake": {
+          "enum": [
+            "wol",
+            "ipmi",
+            "relay",
+            "always-on",
+            "manual",
+            "none"
+          ]
+        },
+        "doctor": {
+          "type": "object",
+          "required": [
+            "passed"
+          ],
+          "properties": {
+            "passed": {
+              "type": "boolean"
+            },
+            "report": {}
+          }
+        }
+      }
+    },
+    "sentinel": {
+      "type": "object",
+      "required": [
+        "benchmark",
+        "time_ms",
+        "drift",
+        "suspect"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "benchmark": {
+          "type": "string"
+        },
+        "time_ms": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "median_ms": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "drift": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "time_ms / median_ms - 1"
+        },
+        "suspect": {
+          "type": "boolean"
+        }
+      }
+    },
+    "started": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "finished": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "passes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "enum": [
+          "timing",
+          "profile"
+        ]
+      },
+      "uniqueItems": true
+    },
+    "profile": {
+      "type": "object",
+      "required": [
+        "profiler",
+        "rules_version"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "profiler": {
+          "enum": [
+            "perf",
+            "samply",
+            "xctrace",
+            "etw"
+          ]
+        },
+        "rules_version": {
+          "type": "string"
+        },
+        "frequency_hz": {
+          "type": "integer"
+        },
+        "call_graph": {
+          "type": "string"
+        },
+        "recordings": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "unattributed_share": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "workflow": {
+      "type": "object",
+      "description": "The GitHub Actions run that produced this",
+      "properties": {
+        "repository": {
+          "type": "string"
+        },
+        "run_id": {
+          "type": "integer"
+        },
+        "sha": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

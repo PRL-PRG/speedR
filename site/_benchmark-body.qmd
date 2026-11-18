@@ -1,0 +1,146 @@
+```{r}
+b <- D$benchmarks[D$benchmarks$id == BENCH, ]
+m <- REF_MACHINE
+est_b <- merge(D$est[D$est$benchmark == BENCH, ], D$runs, by = "run")
+rel_b <- est_b[est_b$kind == "release" & est_b$config == "default", ]
+rel_b <- rel_b[order(rel_b$date), ]
+ref <- rel_b[rel_b$machine == m, ]
+base_v <- D$baselines[[m]]$version
+base_row <- ref[ref$version == base_v, ]
+if (!nrow(base_row)) {            # needs a newer R than the baseline
+  base_row <- ref[1, ]
+  base_v <- base_row$version
+}
+last_row <- ref[nrow(ref), ]
+sp <- exp(base_row$log_mean - last_row$log_mean)
+prof <- D$profiles[D$profiles$benchmark == BENCH, ]
+prof <- merge(prof, D$runs[, c("run", "machine", "version", "kind", "date")], by = "run")
+last_prof <- prof[prof$run == last_row$run, ]
+top <- last_prof[which.max(last_prof$share), ]
+src <- sprintf("https://github.com/PRL-PRG/r-benchmarks/blob/main/benchmarks/%s/%s.R", b$suite, b$name)
+origin <- sprintf("https://github.com/PRL-PRG/r-benchmarks/blob/main/benchmarks/%s/ORIGIN.md", b$suite)
+```
+
+```{r}
+tiles(
+  tile(paste0("R ", last_row$version, " vs R ", base_v), fmt_speedup(sp),
+       paste(fmt_ms(base_row$est_ms), "→", fmt_ms(last_row$est_ms))),
+  tile(paste("Time on R", last_row$version), fmt_ms(last_row$est_ms),
+       sprintf("%d processes · ±%.1f%%", last_row$n, 100 * Z * last_row$log_se)),
+  tile("Most time in", top$category, sprintf("%.0f%% of samples (R %s)", 100 * top$share, last_row$version)),
+  tile("Runs on", paste0("R ≥ ", b$min_version),
+       if (b$min_version != "3.0.0") "not measured on older releases" else "every release since 3.0.0")
+)
+```
+
+```{r}
+div(class = "rs-card",
+  div(class = "rs-card-title", "Time across releases"),
+  div(class = "rs-card-sub", "Geometric mean over processes with its 95% interval; lower is faster. Times are only comparable within a machine."),
+  machine_tabs(D$machines$machine, function(mm) {
+    d <- rel_b[rel_b$machine == mm, ]
+    d$lo <- exp(d$log_mean - Z * d$log_se); d$hi <- exp(d$log_mean + Z * d$log_se)
+    hover <- sprintf("<b>R %s</b><br>%s (95%% CI %s–%s)", d$version, fmt_ms(d$est_ms), fmt_ms(d$lo), fmt_ms(d$hi))
+    p <- plot_ly(d, x = ~date, height = 330) |>
+      add_ribbons(ymin = ~lo, ymax = ~hi, fillcolor = LIGHT[["band"]], line = list(width = 0),
+                  hoverinfo = "skip", showlegend = FALSE) |>
+      add_lines(y = ~est_ms, line = list(color = LIGHT[["series1"]], width = 2, shape = "hv"),
+                hoverinfo = "skip", showlegend = FALSE) |>
+      add_release_markers(d, d$est_ms, hover)
+    rs_layout(p, x = ax(NULL, type = "date"), y = ax("Time per iteration (ms)", rangemode = "tozero"),
+              legend = TRUE, annotations = lts_labels(d, d$est_ms, log = FALSE)) |>
+      layout(margin = list(t = 40))
+  })
+)
+```
+
+```{r}
+pr <- prof[prof$machine == m & prof$kind == "release", ]
+grp <- aggregate(share ~ version + date + group, data = pr, FUN = sum)
+grp <- grp[order(grp$date), ]
+grp$version <- factor(grp$version, levels = unique(grp$version))
+div(class = "rs-card",
+  div(class = "rs-card-title", "Where the time goes"),
+  div(class = "rs-card-sub", paste0("Share of perf samples inside execute(), by category group (", machine_label(m), ").")),
+  plot_group_stack(grp, "version", height = 320)
+)
+```
+
+```{r}
+cat_tab <- merge(
+  prof[prof$run == base_row$run, c("category", "share")],
+  last_prof[, c("category", "share")], by = "category", suffixes = c("_base", "_last"))
+cat_tab <- merge(CATEGORIES, cat_tab, by = "category")
+cat_tab <- cat_tab[match(CATEGORIES$category, cat_tab$category), ]
+# time spent per category, as a share of the baseline's total time
+cat_tab$time_base <- cat_tab$share_base
+cat_tab$time_last <- cat_tab$share_last * last_row$est_ms / base_row$est_ms
+rs_table(
+  data.frame(Category = cat_tab$category, Group = cat_tab$group,
+             `What it covers` = cat_tab$description,
+             `R base` = sprintf("%.1f%%", 100 * cat_tab$share_base),
+             `R latest` = sprintf("%.1f%%", 100 * cat_tab$share_last),
+             `Time change` = ifelse(cat_tab$time_base > 0.002,
+                                    sprintf("%+.0f%%", 100 * (cat_tab$time_last / cat_tab$time_base - 1)), "–"),
+             check.names = FALSE) |>
+    setNames(c("Category", "Group", "What it covers", paste("R", base_v), paste("R", last_row$version), "Time in category")),
+  pagination = FALSE, sortable = FALSE,
+  columns = list(`What it covers` = colDef(minWidth = 260))
+)
+```
+
+```{r}
+dv <- est_b[est_b$kind == "devel", ]
+dv <- dv[order(dv$date), ]
+if (nrow(dv)) {
+  ch <- D$changes[D$changes$benchmark == BENCH, ]
+  p <- plot_ly(dv, x = ~date, height = 280) |>
+    add_lines(y = ~est_ms, line = list(color = LIGHT[["series1"]], width = 2),
+              text = sprintf("r%s · %s", dv$svn_rev, fmt_ms(dv$est_ms)), hoverinfo = "text",
+              showlegend = FALSE)
+  if (nrow(ch)) {
+    chd <- merge(ch, dv[, c("run", "est_ms")], by = "run")
+    p <- p |> add_markers(data = chd, x = ~date, y = ~est_ms, showlegend = FALSE,
+                          marker = list(size = 11, symbol = ifelse(chd$speedup > 1, "triangle-down", "triangle-up"),
+                                        color = LIGHT[["ink"]], line = list(color = LIGHT[["surface"]], width = 2)),
+                          text = sprintf("<b>r%s</b>: %s", chd$svn_rev, fmt_change(chd$speedup)), hoverinfo = "text")
+  }
+  div(class = "rs-card",
+    div(class = "rs-card-title", "R-devel, night by night"),
+    div(class = "rs-card-sub", "Triangles mark nights flagged by change detection (▼ time went down, ▲ up)."),
+    rs_layout(p, x = ax(NULL, type = "date"), y = ax("Time (ms)"), legend = FALSE, hover = "x unified")
+  )
+}
+```
+
+```{r}
+mem <- ref
+p1 <- plot_ly(mem, x = ~date, y = ~max_rss_mb, type = "scatter", mode = "lines+markers", height = 240,
+              line = list(color = LIGHT[["series1"]], width = 2, shape = "hv"),
+              marker = list(color = LIGHT[["series1"]], size = 7),
+              text = sprintf("R %s · %.0f MB", mem$version, mem$max_rss_mb), hoverinfo = "text") |>
+  rs_layout(x = ax(NULL, type = "date"), y = ax("Peak RSS (MB)", rangemode = "tozero"), legend = FALSE)
+p2 <- plot_ly(mem, x = ~date, y = ~gc_ms, type = "scatter", mode = "lines+markers", height = 240,
+              line = list(color = LIGHT[["series1"]], width = 2, shape = "hv"),
+              marker = list(color = LIGHT[["series1"]], size = 7),
+              text = sprintf("R %s · %s in GC", mem$version, fmt_ms(mem$gc_ms)), hoverinfo = "text") |>
+  rs_layout(x = ax(NULL, type = "date"), y = ax("GC time per iteration (ms)", rangemode = "tozero"), legend = FALSE)
+div(class = "rs-card",
+  div(class = "rs-card-title", "Memory"),
+  div(class = "rs-card-sub", "Peak resident memory of the R process, and time spent in the garbage collector (gc.time())."),
+  div(class = "rs-grid2", div(p1), div(p2))
+)
+```
+
+```{r}
+div(class = "rs-card",
+  div(class = "rs-card-title", "About this benchmark"),
+  tags$dl(class = "rs-kv",
+    tags$dt("Suite"), tags$dd(b$suite),
+    tags$dt("Source"), tags$dd(tags$a(href = src, paste0("benchmarks/", b$suite, "/", b$name, ".R"))),
+    tags$dt("Provenance & licence"), tags$dd(tags$a(href = origin, paste0(b$suite, "/ORIGIN.md"))),
+    tags$dt("Minimum R"), tags$dd(b$min_version),
+    tags$dt("Run design"), tags$dd("5 processes × (1 warm-up + 4 measured iterations); profile: 5 perf recordings")
+  )
+)
+```

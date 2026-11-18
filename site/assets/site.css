@@ -1,0 +1,95 @@
+/* Components shared by both themes; colours come from the --rs-* tokens. */
+
+.rs-mock-banner {
+  background: var(--rs-banner-bg);
+  color: var(--rs-banner-ink);
+  border: 1px solid var(--rs-ring);
+  border-radius: 8px;
+  padding: 0.6rem 0.9rem;
+  margin: 0 0 1.5rem 0;
+  font-size: 0.92rem;
+}
+.rs-mock-banner strong { color: inherit; }
+.rs-mock-banner code { background: transparent; color: inherit; padding: 0; }
+
+/* end-of-page notes: the explanations that used to open each page */
+.rs-notes {
+  color: var(--rs-muted); font-size: 0.85rem; max-width: 52rem;
+  border-top: 1px solid var(--rs-grid); margin-top: 2.5rem; padding-top: 0.75rem;
+}
+.rs-notes ul { padding-left: 1.1rem; margin-bottom: 0; }
+.rs-notes li + li { margin-top: 0.3rem; }
+
+/* stat tiles */
+.rs-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0 1.75rem;
+}
+.rs-tile {
+  background: var(--rs-surface);
+  border: 1px solid var(--rs-ring);
+  border-radius: 10px;
+  padding: 0.85rem 1rem 0.9rem;
+}
+.rs-tile-label { color: var(--rs-ink2); font-size: 0.85rem; display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
+.rs-tile-value { color: var(--rs-ink); font-size: 1.9rem; font-weight: 600; line-height: 1.2; margin-top: 0.2rem; }
+.rs-tile-sub { color: var(--rs-muted); font-size: 0.82rem; margin-top: 0.15rem; }
+
+/* chart cards */
+.rs-card {
+  background: var(--rs-surface);
+  border: 1px solid var(--rs-ring);
+  border-radius: 10px;
+  padding: 0.9rem 1rem 0.6rem;
+  margin: 0.5rem 0 1.5rem;
+}
+.rs-card h3, .rs-card .rs-card-title { margin: 0 0 0.15rem; font-size: 1.05rem; font-weight: 600; color: var(--rs-ink); }
+.rs-card .rs-card-sub { color: var(--rs-muted); font-size: 0.85rem; margin-bottom: 0.5rem; }
+
+/* badges & status (status = icon + word, never colour alone) */
+.rs-badge {
+  display: inline-block; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.01em;
+  padding: 0.1rem 0.45rem; border-radius: 999px; border: 1px solid var(--rs-ring);
+  color: var(--rs-ink2); background: var(--rs-page); vertical-align: middle;
+}
+.rs-badge-experimental { color: var(--rs-warning); background: var(--rs-warning-bg); }
+.rs-badge-mock { color: var(--rs-banner-ink); background: var(--rs-banner-bg); }
+.rs-status { font-size: 0.85rem; font-weight: 600; white-space: nowrap; padding: 0.05rem 0.4rem; border-radius: 4px; }
+.rs-status-good { color: var(--rs-good); background: var(--rs-good-bg); }
+.rs-status-critical { color: var(--rs-critical); background: var(--rs-critical-bg); }
+.rs-status-warning { color: var(--rs-warning); background: var(--rs-warning-bg); }
+.rs-status-neutral { color: var(--rs-ink2); }
+
+/* hand-built tabs */
+.rs-tabset { margin: 0.5rem 0 1.5rem; }
+.rs-tabs { border-bottom-color: var(--rs-grid); margin-bottom: 0.6rem; }
+.rs-tabs .nav-link { color: var(--rs-ink2); font-size: 0.9rem; padding: 0.35rem 0.8rem; }
+.rs-tabs .nav-link.active { color: var(--rs-ink); background: var(--rs-surface); border-color: var(--rs-grid) var(--rs-grid) var(--rs-surface); }
+
+.rs-kv { display: grid; grid-template-columns: max-content 1fr; gap: 0.25rem 1rem; font-size: 0.92rem; }
+.rs-kv dt { color: var(--rs-ink2); font-weight: 500; }
+.rs-kv dd { margin: 0; color: var(--rs-ink); }
+
+.rs-empty {
+  border: 1px dashed var(--rs-axis); border-radius: 10px; padding: 1.5rem;
+  color: var(--rs-ink2); background: var(--rs-surface); margin: 1rem 0;
+}
+.rs-muted { color: var(--rs-muted); }
+.rs-num { font-variant-numeric: tabular-nums; }
+
+/* plotly toolbar only while the pointer is over the chart */
+.js-plotly-plot .modebar-container { opacity: 0; transition: opacity 0.15s; }
+.js-plotly-plot:hover .modebar-container, .js-plotly-plot:focus-within .modebar-container { opacity: 1; }
+
+/* Observable inputs on the compare page */
+.rs-filters { display: flex; flex-wrap: wrap; gap: 0.75rem 1.25rem; align-items: end; margin: 0.5rem 0 1rem; }
+.rs-filters form { margin: 0; }
+
+/* simple responsive grids (Bootstrap .row is unreliable inside cell output) */
+.rs-grid2, .rs-grid3 { display: grid; gap: 0.75rem 1rem; }
+.rs-grid2 { grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr)); }
+.rs-grid3 { grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); }
+.rs-grid2 > *, .rs-grid3 > * { min-width: 0; }
+.rs-grid3 > .rs-card { margin: 0; }

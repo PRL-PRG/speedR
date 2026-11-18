@@ -1,0 +1,26 @@
+name: Performance question
+description: A number on the dashboard looks wrong, or R got slower or faster
+labels: [performance]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks! Please link the page and say which versions or nights you compare.
+        Remember that speedups are only meaningful within one machine.
+  - type: input
+    id: link
+    attributes:
+      label: Dashboard link
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What you see and what you expected
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction (optional)
+      description: If you reproduced it outside the dashboard, how (R versions, machine, code).

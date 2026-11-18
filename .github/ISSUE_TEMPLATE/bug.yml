@@ -1,0 +1,22 @@
+name: Bug report
+description: Something in the pipeline or the dashboard is broken
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: input
+    id: where
+    attributes:
+      label: Where
+      description: Dashboard URL, workflow run link, or command.
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: Error output, screenshots (light or dark mode?), browser, versions.
+      render: text

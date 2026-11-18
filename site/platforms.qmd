@@ -1,0 +1,76 @@
+---
+title: "Platforms"
+subtitle: "The same benchmarks on different operating systems and architectures"
+---
+
+```{r}
+#| include: false
+source("R/site.R")
+ms <- D$machines
+rel <- D$runs[D$runs$kind == "release" & D$runs$config == "default", ]
+# plot the releases every machine has measured, relative to the site-wide
+# baseline (newest Ubuntu LTS R) if all machines have it, else the oldest of them
+start <- max(as.Date(vapply(ms$machine, function(mm) as.character(min(rel$date[rel$machine == mm])), "")))
+has_base <- vapply(ms$machine, function(mm) BASELINE_VERSION %in% rel$version[rel$machine == mm], TRUE)
+common_base <- if (all(has_base)) BASELINE_VERSION else rel$version[rel$date == start][1]
+first_common <- rel$version[rel$date == start][1]
+tls <- do.call(rbind, lapply(ms$machine, function(mm) {
+  r <- rel[rel$machine == mm & rel$date >= start, ]
+  timeline(D$est, r, r$run[r$version == common_base])
+}))
+```
+
+```{r}
+p <- plot_ly(height = 380)
+for (i in seq_len(nrow(ms))) {
+  d <- tls[tls$machine == ms$machine[i], ]
+  d <- d[order(d$date), ]
+  p <- p |> add_trace(data = d, x = ~date, y = ~speedup, type = "scatter", mode = "lines+markers",
+                      name = machine_label(ms$machine[i]),
+                      line = list(color = SERIES[i], width = 2, shape = "hv"),
+                      marker = list(color = SERIES[i], size = 7, line = list(color = LIGHT[["surface"]], width = 2)),
+                      text = sprintf("%s<br>R %s: %s (n=%d)", ms$machine[i], d$version, fmt_speedup(d$speedup, 3), d$n),
+                      hoverinfo = "text")
+}
+div(class = "rs-card",
+  div(class = "rs-card-title", paste("Speedup relative to R", common_base, "on each machine")),
+  div(class = "rs-card-sub", "Geomean over the benchmarks that machine ran on every release shown."),
+  rs_layout(p, x = ax(NULL, type = "date"), y = speedup_axis(paste("Speedup vs R", common_base, "(×)"), tls$speedup),
+            shapes = list(baseline_line()))
+)
+```
+
+```{r}
+latest <- do.call(rbind, lapply(ms$machine, function(mm) {
+  r <- rel[rel$machine == mm, ]
+  lr <- r[which.max(r$date), ]
+  pr <- D$profiles[D$profiles$run == lr$run, ]
+  g <- aggregate(share ~ benchmark + group, data = pr, FUN = sum)
+  g <- aggregate(share ~ group, data = g, FUN = mean)
+  g$machine <- paste0(machine_label(mm), if (ms$profiles[ms$machine == mm] != "validated") " ⚠" else "")
+  g
+}))
+div(class = "rs-card",
+  div(class = "rs-card-title", "Where the time goes, by platform (latest release)"),
+  div(class = "rs-card-sub", "Mean share over benchmarks. ⚠ profiler not yet validated."),
+  plot_group_stack(latest, "machine", height = 260, horizontal = TRUE)
+)
+```
+
+## Machines
+
+```{r}
+mt <- ms
+mt$status <- vapply(mt$profiles, function(s) as.character(status(s)), "")
+rs_table(
+  data.frame(Machine = mt$machine, OS = mt$os, Arch = mt$arch, CPU = mt$cpu, Profiler = mt$profiler,
+             Profiles = mt$status, `Measured since` = paste("R", mt$first_version), check.names = FALSE),
+  columns = list(Profiles = colDef(html = TRUE)), pagination = FALSE)
+```
+
+[Machine details, sentinel history and change log →](machines.qmd)
+
+::: {.rs-notes}
+- Times from different machines are never divided by each other: that would measure the hardware, not R. Each curve starts at R `r first_common`, the oldest release every machine has measured, and is relative to R `r common_base` on the same machine.
+- ⚠ marks profiles from a profiler not yet validated against perf on Linux x86-64.
+:::
