@@ -1,0 +1,32 @@
+#!/bin/bash
+# Queue speedR builds and benchmark runs on a benchmark node through Slurm, so
+# the scheduler runs them one at a time (whole node each) and they show in the
+# dashboard. Run on the controller; the job runs node/speedr-node on the node.
+#
+#   speedr-submit build SOURCE...            one build job per source
+#   speedr-submit run SOURCE [timing args]   one job: build if needed, then the timing pass
+#
+# Jobs run as the speedr account, whatever account submits them, from its
+# checkout ~speedr/speedr on the node. Job output: ~speedr/speedr-work/slurm-<job>.out;
+# a run's results end up in the controller's spool (/srv/speedr/spool).
+set -euo pipefail
+[ "$(id -un)" = speedr ] || exec sudo -n -u speedr -H "$0" "$@"
+partition=${SPEEDR_PARTITION:-kabylake}
+node=$HOME/speedr/node/speedr-node   # the same path on the node
+
+job() {  # NAME COMMAND -> job id
+    sbatch --parsable --partition="$partition" --exclusive --job-name="$1" --time=2-00:00:00 \
+        --chdir="$HOME" --output="$HOME/speedr-work/slurm-%j.out" --wrap="$2"
+}
+
+cmd=${1:-}; shift || true
+case $cmd in
+build)
+    for s in "$@"; do echo "$(job "build R-$s" "$node build $s") build R-$s"; done
+    ;;
+run)
+    s=$1; shift
+    echo "$(job "run R-$s" "$node build $s && $node run $s ${*@Q}") run R-$s"
+    ;;
+*) echo "usage: $0 build SOURCE... | run SOURCE [timing args]" >&2; exit 2 ;;
+esac

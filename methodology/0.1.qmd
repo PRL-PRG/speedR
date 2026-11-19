@@ -64,9 +64,11 @@ repetition and process management belong to the shared harness, driven by the
   turbo off and the frequency fixed, address-space randomisation off
   system-wide, transparent huge pages off, and no power-management daemons. The
   batch system checks all of it before every job and refuses to run otherwise.
-- **CPU temperatures and thermal throttling** are logged every second during
-  a run. A benchmark execution during which the CPU package reached 90 °C or
-  the CPU throttled itself is flagged as possibly affected.
+- **CPU temperature and thermal throttling** are sampled every second during
+  every benchmark execution, which records its hottest reading and the throttle
+  events counted during it. An execution during which the CPU came within
+  10 °C of the limit the CPU itself declares, or throttled, is flagged as
+  possibly affected.
 - A **sentinel** benchmark checks that the machine behaves as it did before;
   see [Machines](machines.qmd).
 

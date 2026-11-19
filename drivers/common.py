@@ -10,7 +10,8 @@ speedR needs differently:
   runs R 3.x (which knows only `--slave`) and 4.x (which still accepts it), and
   `setarch -R` on Linux, so address-space randomisation is off for R alone;
 - the run design (guidelines §3) and perf settings (§6) as defaults;
-- the configuration's run-time environment from speedR's configs.toml.
+- the configuration's run-time environment from speedR's configs.toml;
+- the timing pass also records CPU temperature and throttling (bench's Thermal).
 """
 
 import platform

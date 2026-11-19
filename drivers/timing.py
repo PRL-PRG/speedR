@@ -5,7 +5,7 @@ from dataclasses import field
 
 import common
 import rbench as rb
-from bench import Context, Params
+from bench import Context, Params, Thermal
 
 # r-benchmarks' own defaults are 3 runs x 5 iterations, 2 of them warm-up.
 RUN_DESIGN = {"runs": 5, "iterations": 5, "warmups": 1}
@@ -31,10 +31,16 @@ def command(ctx: Context[Params]) -> list[str]:
     return common.r_command(p.R, rb.BENCHMARKS_FOLDER / "harness.R", args)
 
 
+# CPU temperature and throttling around every execution: samples cpu_temp_max
+# and cpu_throttle, flagged `suspect` when the CPU throttled or ran near its limit
+THERMAL = Thermal()
+
 APP = (
     rb.DEFAULT_APP.with_params(TimingParams)
     .with_command(command, override=True)
     .with_env(lambda ctx: common.config_env(ctx.params.config))
+    .with_hook(THERMAL)
+    .with_metric(THERMAL)
 )
 
 if __name__ == "__main__":
