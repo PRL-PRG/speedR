@@ -1,0 +1,173 @@
+#!/bin/bash
+# speedR on a benchmark node: build a GNU R source tree in the toolchain image
+# (build/: housekeeping CPUs, no network), then run the timing pass on it in the
+# same image, pinned to the isolated CPU, with no network.
+#
+#   speedr-node image                         build the toolchain image
+#   speedr-node env|id SOURCE                 the build settings | the build id
+#   speedr-node configure SOURCE              configure only; print config.h
+#   speedr-node build SOURCE                  build R (cached by build id) in $work/r/<id>
+#   speedr-node run SOURCE [timing.py args]   timing pass -> $work/results/LABEL/RUN_ID/,
+#                                             copied to the controller's spool
+#
+# SOURCE is a release (4.6.2), `devel` or `patched` (today's snapshot, kept as
+# devel-r<svn revision>), such a label (devel-r90937), or a source tarball. How a
+# version is built: build/settings.toml. Data (sources, logs, results) goes to
+# $SPEEDR_WORK (~/speedr-work); this checkout needs `uv sync` once.
+set -euo pipefail
+repo=$(cd "$(dirname "$0")/.." && pwd)
+work=${SPEEDR_WORK:-$HOME/speedr-work}
+image=speedr-toolchain
+bench_cpus=3 housekeeping_cpus=0-2
+prerelease=https://cloud.r-project.org/src/base-prerelease
+cran=https://cloud.r-project.org/src/contrib
+# the one package beyond R's recommended ones that the suite needs (lr, lr_test,
+# pca and pca-blocked generate their input with it): every build gets the
+# version that was on CRAN at the date of its source
+extra_pkg=clusterGeneration
+# results go to the controller's spool (speedr's key can only write there)
+spool=speedr@prl-prg-bench-master:
+mkdir -p "$work/src" "$work/results" "$work/r"
+
+# the speedr account is in the docker group; others go through sudo
+docker() { if [ -w /var/run/docker.sock ]; then command docker "$@"; else sudo -n docker "$@"; fi; }
+
+tarball_file() {  # TARBALL NAME -> first line of the top-level file NAME
+    # (top-level only: R's sources have more files called VERSION)
+    local m; m=$(tar -tzf "$1" | awk -v n="$2" '$0 ~ "^[^/]+/" n "$" && !f { print; f = 1 }')
+    [ -n "$m" ] || return 0
+    tar -xzOf "$1" "$m" | head -n 1
+}
+
+snapshot() {  # devel|patched -> label of today's snapshot, downloaded into src/
+    local t rev; t=$(mktemp -p "$work/src")
+    curl -fsSL -o "$t" "$prerelease/R-$1.tar.gz"
+    rev=$(tarball_file "$t" SVN-REVISION | sed -n 's/^Revision: *//p')
+    [ -n "$rev" ] || { rm -f "$t"; echo "no SVN-REVISION in R-$1.tar.gz" >&2; exit 1; }
+    mv "$t" "$work/src/R-$1-r$rev.tar.gz"
+    echo "$1-r$rev"
+}
+
+resolve() {  # SOURCE -> label; its tarball is then $work/src/R-<label>.tar.gz
+    local s=$1 label rev f
+    case $s in
+        devel|patched) snapshot "$s"; return ;;
+        *.tar.gz)
+            rev=$(tarball_file "$s" SVN-REVISION | sed -n 's/^Revision: *//p')
+            label=$(tarball_file "$s" VERSION |
+                awk '{ print ($2 == "Under") ? "devel" : ($2 == "Patched") ? "patched" : $1 }')
+            case $label in devel|patched) label="$label-r$rev" ;; esac
+            cp "$s" "$work/src/R-$label.tar.gz"; echo "$label"; return ;;
+        devel-r*|patched-r*)
+            if [ ! -s "$work/src/R-$s.tar.gz" ]; then   # still on CRAN?
+                f=$(curl -fsSL "$prerelease/" | grep -o -E "R-${s%%-r*}_[0-9-]+_r${s##*-r}\\.tar\\.gz" | head -1)
+                [ -n "$f" ] || { echo "no snapshot $s on CRAN any more" >&2; exit 1; }
+                curl -fsSL -o "$work/src/R-$s.tar.gz" "$prerelease/$f"
+            fi
+            echo "$s"; return ;;
+        *)
+            [ -s "$work/src/R-$s.tar.gz" ] ||
+                curl -fsSL -o "$work/src/R-$s.tar.gz" "https://cloud.r-project.org/src/base/R-${s%%.*}/R-$s.tar.gz"
+            echo "$s" ;;
+    esac
+}
+
+source_version() { tarball_file "$work/src/R-$1.tar.gz" VERSION; }   # LABEL -> its VERSION line
+
+source_date() {  # LABEL -> the date of its source (SVN-REVISION's Last Changed Date)
+    tar -xzOf "$work/src/R-$1.tar.gz" --wildcards '*/SVN-REVISION' | sed -n 's/^Last Changed Date: *//p' | head -1
+}
+
+extra_pkg_file() {  # LABEL -> the extra package's tarball current on CRAN at that date
+    curl -fsSL "$cran/Archive/$extra_pkg/" "$cran/" |
+        grep -o -E ">${extra_pkg}_[0-9.-]+\\.tar\\.gz</a> +[0-9-]+" | sed -E 's/^>//; s#</a> +# #' |
+        awk -v d="$(source_date "$1")" '$2 <= d' | sort -k2 | tail -1 | cut -d' ' -f1
+}
+
+flags_env() { "$repo/.venv/bin/speedr" build-env "$(source_version "$1")"; }
+
+build_id() {  # LABEL -> id, from speedr.ids (tarball, settings, package, toolchain image)
+    local sha toolchain
+    sha=$(sha256sum "$work/src/R-$1.tar.gz" | cut -d' ' -f1)
+    toolchain=$(docker image inspect --format '{{.Id}}' "$image")
+    flags_env "$1" | "$repo/.venv/bin/python" -c '
+import sys
+from speedr.ids import build_id
+sha, toolchain, package = sys.argv[1:]
+flags = dict(line.rstrip("\n").split("=", 1) for line in sys.stdin)
+flags["configure"] = "R defaults (./configure --prefix only)"
+flags["packages"] = package
+print(build_id("gnur", sha, "default", flags, toolchain))' "$sha" "$toolchain" "$(extra_pkg_file "$1")"
+}
+
+in_image() {  # LABEL ARGS... -> build/build-r.sh ARGS in the image, with this version's settings
+    local l=$1; shift
+    flags_env "$l" > "$work/flags-$l.env"
+    docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp --cpuset-cpus "$housekeeping_cpus" \
+        --network none --tmpfs /build:exec,mode=1777,size=8g --env-file "$work/flags-$l.env" \
+        -v "$repo:$repo:ro" -v "$work:$work" "$image" \
+        "$repo/build/build-r.sh" "$work/src/R-$l.tar.gz" "$@"
+}
+
+cmd=${1:-}; shift || true
+case $cmd in
+image)
+    docker build --cpuset-cpus "$housekeeping_cpus" -t "$image" "$repo/build"
+    ;;
+env)
+    l=$(resolve "$1"); echo "# R $l: $(source_version "$l"), $(source_date "$l"), $(extra_pkg_file "$l")"
+    flags_env "$l"
+    ;;
+id)
+    build_id "$(resolve "$1")"
+    ;;
+configure)
+    l=$(resolve "$1")
+    in_image "$l" /tmp/unused configure
+    ;;
+build)
+    l=$(resolve "$1")
+    id=$(build_id "$l"); prefix=$work/r/$id
+    if [ -x "$prefix/bin/R" ]; then echo "R $l: cached build $id"; exit 0; fi
+    echo "R $l: building $id"
+    pkg=$(extra_pkg_file "$l")
+    [ -s "$work/src/$pkg" ] || curl -fsL -o "$work/src/$pkg" "$cran/$pkg" ||
+        curl -fsSL -o "$work/src/$pkg" "$cran/Archive/$extra_pkg/$pkg"
+    in_image "$l" "$prefix" build "$work/src/$pkg" > "$work/build-$l.log" 2>&1 ||
+        { echo "R $l: build failed, see $work/build-$l.log"; rm -rf "$prefix"; exit 1; }
+    {
+        echo "source=$l"; echo "version=$(source_version "$l")"; echo "date=$(source_date "$l")"
+        echo "id=$id"; echo "package=$pkg"; echo "configure=R defaults (./configure --prefix only)"
+        echo "toolchain=$(docker image inspect --format '{{.Id}}' "$image")"
+        cat "$work/flags-$l.env"
+    } > "$prefix/speedr-build.env"
+    echo "R $l: built $id"
+    ;;
+run)
+    l=$(resolve "$1"); shift
+    id=$(build_id "$l")
+    [ -x "$work/r/$id/bin/R" ] || { echo "R $l: no build $id; run '$0 build $l' first"; exit 1; }
+    run_id=$(date -u +%Y%m%dT%H%M%SZ)-$(openssl rand -hex 3)
+    out=$work/results/$l/$run_id; mkdir -p "$out"
+    cp "$work/r/$id/speedr-build.env" "$out/"
+    # setup() caches inputs in the benchmarks' data/ folders, some per R
+    # version (Matrix objects): start every run without them
+    find "$repo/.venv" -path '*/rbench/benchmarks/*/data' -prune -exec rm -rf {} +
+    echo "R $l (build $id): run $run_id on CPU $bench_cpus, kernel $(uname -r)"
+    # the container runs under dockerd, not this process: when Slurm cancels
+    # the job (SIGTERM), stop it too
+    name=speedr-run-$run_id
+    trap 'docker kill "$name" >/dev/null 2>&1; exit 143' TERM INT
+    # seccomp=unconfined: docker's default profile refuses the personality
+    # call `setarch -R` makes to switch ASLR off for R
+    docker run --rm --name "$name" --user "$(id -u):$(id -g)" -e HOME=/tmp --network none \
+        --cpuset-cpus "$bench_cpus" --cpuset-mems 0 --security-opt seccomp=unconfined \
+        -v "$repo:$repo" -v "$work:$work" -w "$repo" "$image" \
+        .venv/bin/python drivers/timing.py --R "$work/r/$id/bin/R" \
+            --json "$out/timing.json" --csv "$out/timing.csv" --dir "$out/exec" --no-progress "$@" &
+    rc=0; wait $! || rc=$?  # in the background, so the trap runs as soon as the signal arrives
+    rsync -aR "$work/results/./$l/$run_id" "$spool" && echo "results: $out, copied to the controller's spool"
+    exit $rc
+    ;;
+*) echo "usage: $0 image | env|id|configure|build SOURCE | run SOURCE [timing args]" >&2; exit 2 ;;
+esac

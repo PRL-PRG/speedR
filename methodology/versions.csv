@@ -1,0 +1,2 @@
+version,status,date,summary
+0.1,draft,2026-11-19,"First measurements on the kabylake node: R's default build with GCC 16 as upstream GCC, the C dialect of each release's time, recommended packages"

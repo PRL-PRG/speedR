@@ -8,8 +8,15 @@ configurations and platforms, with per-benchmark profiles.
 
 ## Render
 
-    quarto render            # whole site into _site/
+    ./render.sh              # one site per methodology version: _site/<version>/
+    quarto render            # just the newest methodology version, into _site/
     quarto preview           # live preview while editing
+
+Every run belongs to one methodology version (`../methodology/`), and each
+version gets its own copy of the site showing only its runs, so numbers
+measured under different methods are never mixed. A bar at the top of every
+page names the version and links to the same page under the others.
+`SPEEDR_METHODOLOGY=<version>` renders a version other than the newest.
 
 Requires Quarto ≥ 1.11 and R with `htmltools`, `plotly`, `reactable`,
 `jsonlite`, `knitr`, `rmarkdown`.

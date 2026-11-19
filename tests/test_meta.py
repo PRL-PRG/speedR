@@ -19,3 +19,8 @@ def test_missing_and_malformed_fields_are_reported():
 
 def test_unknown_top_level_keys_are_rejected():
     assert meta.errors(EXAMPLE | {"colour": "red"})
+
+
+def test_methodology_is_required():
+    errs = meta.errors({k: v for k, v in EXAMPLE.items() if k != "methodology"})
+    assert any("'methodology' is a required property" in e for e in errs)

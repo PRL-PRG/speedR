@@ -16,6 +16,11 @@ dependencies = ["jsonschema>=4.22", "rbench"]
 [tool.uv.sources]
 rbench = { git = "https://github.com/PRL-PRG/r-benchmarks.git", rev = "65ca9a3dda1e35b6d550d97c71c086b479c8cfde" }
 
+# bench with Thermal (PRL-PRG/bench#3, from the fork) until r-benchmarks pins a
+# bench that has it
+[tool.uv]
+override-dependencies = ["bench @ git+https://github.com/MatejKocourek/bench.git@139ab198a8b663aeef09531fa29f906053a86173"]
+
 [project.scripts]
 speedr = "speedr.cli:main"
 

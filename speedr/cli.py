@@ -7,7 +7,7 @@ import json
 import sys
 from pathlib import Path
 
-from . import __version__, configs, machines, meta, profile, results, upstream
+from . import __version__, build, configs, machines, meta, methodology, profile, results, upstream
 
 
 def cmd_machines(args: argparse.Namespace) -> int:
@@ -20,6 +20,18 @@ def cmd_machines(args: argparse.Namespace) -> int:
 def cmd_configs(args: argparse.Namespace) -> int:
     for c in configs.load_all().values():
         print(f"{c.name:12} {c.status:8} {c.description}")
+    return 0
+
+
+def cmd_methodology(args: argparse.Namespace) -> int:
+    for m in methodology.load_all():
+        print(f"{m.version:6} {m.status:7} {m.date}  {m.summary}")
+    return 0
+
+
+def cmd_build_env(args: argparse.Namespace) -> int:
+    for k, v in build.environment(args.version).items():
+        print(f"{k}={v}")
     return 0
 
 
@@ -65,6 +77,13 @@ def parser() -> argparse.ArgumentParser:
         func=cmd_machines)
     sub.add_parser("configs", help="list and validate configs.toml").set_defaults(
         func=cmd_configs)
+    sub.add_parser("methodology", help="list the methodology versions").set_defaults(
+        func=cmd_methodology)
+    b = sub.add_parser("build-env", help="the compilers and configure answers to build an R "
+                       "version with (build/settings.toml)")
+    b.add_argument("version",
+                   help='a VERSION file\'s line, e.g. 4.6.2 or "4.7.0 Under development"')
+    b.set_defaults(func=cmd_build_env)
     v = sub.add_parser("validate-meta", help="check meta.json files against the schema")
     v.add_argument("files", nargs="+", metavar="meta.json")
     v.set_defaults(func=cmd_validate_meta)
@@ -86,7 +105,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     try:
         return args.func(args)
-    except (machines.MachineError, configs.ConfigError, upstream.UpstreamError) as e:
+    except (machines.MachineError, configs.ConfigError, methodology.MethodologyError,
+            build.BuildError,
+            upstream.UpstreamError) as e:
         print(f"speedr: {e}", file=sys.stderr)
         return 1
 

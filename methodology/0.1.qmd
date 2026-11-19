@@ -1,0 +1,120 @@
+## What is measured
+
+The corpus is [PRL-PRG/r-benchmarks](https://github.com/PRL-PRG/r-benchmarks),
+pinned to one commit, characterised in *What Do R Benchmarks Measure? Toward a
+Performance-Characterized Benchmark Suite for R* (VMIL'26). Each program
+defines `execute(size)` and, optionally, an untimed `setup()`. Timing,
+repetition and process management belong to the shared harness, driven by the
+[bench](https://github.com/PRL-PRG/bench) framework.
+
+- **R's recommended packages** (MASS, Matrix, lattice, ...) are built with
+  every release, as R's default build does: each R version runs with the
+  versions it shipped with.
+- Four benchmarks (`lr`, `lr_test`, `pca`, `pca-blocked`) also need
+  clusterGeneration, used only to generate their input in `setup()`. Every
+  build gets the version that was on CRAN at the date of its source; where it
+  does not install, those benchmarks are recorded as unsupported.
+
+## How R is built
+
+- **Releases** are built from the CRAN source tarballs. **R-devel** (and
+  R-patched) from the source snapshots CRAN publishes daily, which include the
+  recommended packages, identified by their SVN revision.
+- Every version is built **the way R builds by default**: a plain
+  `./configure` (only the install prefix is given) and `make`. So R chooses
+  its own flags (`-g -O2`), uses its internal BLAS and LAPACK, links into one
+  `R` binary (no shared `libR`) and builds the recommended packages.
+- **One compiler for every version:** GCC 16.2.0 as upstream builds it (the
+  official `gcc:16` container image), in an image whose libraries come from a
+  dated Ubuntu archive snapshot. A compiler change would move every number at
+  once. Upstream GCC adds no hardening by itself (distributions' GCCs add
+  `_FORTIFY_SOURCE`, stack protector, PIE and more), and its own `-O2`,
+  vectoriser included, is used for every version.
+- **Settings by version range.** A settings file adds compiler options to
+  every version or to versions up to or from a given release. A source tree is
+  placed by the version it declares, so a snapshot of R-devel gets the rules
+  of the release it leads up to, and releases after R 4.6.2 keep the current
+  settings.
+- **The C dialect of the time.** Each version gets the default C dialect of
+  the newest GCC released before it (gnu89 until GCC 4.9, gnu11 for GCC 5 to 7,
+  gnu17 for GCC 8 to 14, gnu23 from GCC 15); R's `configure` then adds its own
+  `-std` where it did at the time (`-std=gnu99` on top of gnu89, C23 from R
+  4.5.0).
+- **Settings that change no generated code** go to every version:
+  `-fpermissive` (implicit declarations were warnings before GCC 14; without
+  it R 3.0.0's `configure` silently decides `ftell` is broken),
+  `-fallow-argument-mismatch` (Fortran, likewise before gfortran 10) and a
+  `configure` answer that lets R before 4.2 accept curl 8. For R 4.6.2,
+  `configure` decides exactly the same with and without them.
+- **`-fcommon`** (the default before GCC 10) can change the generated code, so
+  it goes only to the releases up to the newest one that does not link
+  without it: R 3.6.1 and older (found by bisection; 3.6.2 links).
+- R before 4.0 needs PCRE1, which Ubuntu no longer ships: it is built from
+  its last release (8.45) with the same compiler.
+
+## How a run is measured
+
+- Every benchmark runs in **5 separate R processes**, each doing 1 warm-up and
+  4 measured iterations, in a fixed shuffled order, as `R --slave --vanilla`
+  under `setarch -R`.
+- Runs execute in the build's container, pinned to one isolated CPU core, with
+  no network.
+- The machine runs a pinned kernel, with the benchmark core isolated from the
+  scheduler (`isolcpus`, `nohz_full`, `rcu_nocbs`), the performance governor,
+  turbo off and the frequency fixed, address-space randomisation off
+  system-wide, transparent huge pages off, and no power-management daemons. The
+  batch system checks all of it before every job and refuses to run otherwise.
+- **CPU temperature and thermal throttling** are sampled every second during
+  every benchmark execution, which records its hottest reading and the throttle
+  events counted during it. An execution during which the CPU came within
+  10 °C of the limit the CPU itself declares, or throttled, is flagged as
+  possibly affected.
+- A **sentinel** benchmark checks that the machine behaves as it did before;
+  see [Machines](machines.qmd).
+
+## Statistics
+
+- A benchmark's time on a run is the **geometric mean over processes** of
+  each process's median iteration. Its interval is a 95% interval with the
+  process as the unit of replication.
+- A **speedup** is *time(A) / time(B)*: above 1× means B is faster. Speedups
+  are only ever computed between runs on the **same machine** and under the
+  **same methodology version**.
+- The **baseline** (1×) is the R version shipped in the **newest Ubuntu LTS**,
+  currently R `r BASELINE_VERSION` in Ubuntu `r UBUNTU_LTS$ubuntu[nrow(UBUNTU_LTS)]`:
+  the R most Linux users get without adding CRAN's repository. The table of
+  which R each LTS ships (`r paste0(UBUNTU_LTS$r, " in ", UBUNTU_LTS$ubuntu, collapse = ", ")`)
+  is kept in `data/ubuntu-lts.csv`. Every build checks Ubuntu's release list
+  for a newer LTS and reads the `r-base` version it shipped from Launchpad, so
+  when a new LTS is released every speedup on the site is **rescaled to its R**
+  at the next build. A machine that has not measured that release uses its oldest
+  measured release instead.
+- Suite-level numbers are **geometric means** over the benchmarks that every
+  compared run could execute. The count is always shown, because old releases
+  cannot run benchmarks that need newer R.
+- R-devel **change detection** flags a benchmark when it moves by more than
+  2% and outside its interval relative to the previous seven good nights, and
+  the next three nights confirm it.
+
+## Profiles {#profiles}
+
+A second pass records each benchmark 5 times with
+`perf record --call-graph dwarf,32768` on the same build. Only samples
+inside `execute()` are kept, using phase markers the harness prints. Each sample
+is charged to the **innermost stack frame** a rule recognises, checked in this
+order:
+
+1. **Object rules:** frames in BLAS/LAPACK libraries are `native-blas`, and
+   frames in a package's own shared object are `native-ffi`.
+2. **Symbol rules:** a table of named interpreter functions (for example
+   `bcEval` → interpreter, `R_findVar` → lookup, `Rf_duplicate` →
+   mem-duplicate).
+3. **Shape rule:** `do_*` and `ALT*` functions inside the interpreter are
+   `primitives`, apart from the dispatch primitives (`UseMethod`,
+   `NextMethod`, `standardGeneric`).
+
+Samples no rule reaches are reported as **unattributed** and never hidden. A
+run whose unattributed share exceeds 5% fails the quality gate. The rules were
+validated (VMIL'26) on builds like these, without frame pointers. Profiles on platforms without `perf` (macOS:
+samply) are marked *experimental* until their category shares are shown to
+agree with perf.

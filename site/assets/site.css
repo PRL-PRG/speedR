@@ -10,6 +10,14 @@
   font-size: 0.92rem;
 }
 .rs-mock-banner strong { color: inherit; }
+
+/* methodology version bar, on every page */
+.rs-mv {
+  color: var(--rs-muted);
+  font-size: 0.85rem;
+  margin: 0 0 1rem 0;
+}
+.rs-mv strong { color: var(--rs-ink); }
 .rs-mock-banner code { background: transparent; color: inherit; padding: 0; }
 
 /* end-of-page notes: the explanations that used to open each page */

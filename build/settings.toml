@@ -1,0 +1,67 @@
+# How every R version is built (speedr/build.py, `speedr build-env`). The base
+# is R's default
+# build (plain ./configure: -g -O2, internal BLAS/LAPACK, recommended
+# packages) with upstream GCC 16 (the toolchain image's gcc, g++, gfortran).
+# Each [[rule]] adds settings to the versions in its range; a rule without
+# `from`/`until` applies to every version.
+#
+# `from` and `until` are inclusive and are compared with the version a source
+# tree declares in its VERSION file, so snapshots of R-devel ("4.7.0 Under
+# development") and R-patched get the rules of the release they lead up to,
+# and releases newer than any range here keep the current settings.
+#
+# Settings: cc, cxx, fc (compiler options, appended in rule order) and
+# configure (VAR=value answers for configure).
+
+# --- every version: settings that change no generated code ----------------------
+
+[[rule]]
+why = """GCC < 14 accepted implicit declarations and int/pointer mixups with a
+warning. Old configure tests and sources rely on it: without it R 3.0.0
+silently decides ftell is broken and R 3.6.3 does not configure."""
+cc = "-fpermissive"
+
+[[rule]]
+why = "gfortran < 10 accepted mismatched procedure arguments with a warning."
+fc = "-fallow-argument-mismatch"
+
+[[rule]]
+why = """R < 4.2 rejects libcurl 8 as "not version 7"; the answers only skip that
+version check."""
+configure = ["r_cv_have_curl722=yes", "r_cv_have_curl728=yes"]
+
+# --- the C dialect of the time ----------------------------------------------------
+# The default dialect of the newest GCC released before the version (GCC 5:
+# 2015-04-22, 8: 2018-05-02, 15: 2025-04-25); R's configure adds its own -std
+# on top where it did then (-std=gnu99 over gnu89; C23 from R 4.5.0).
+
+[[rule]]
+why = "GCC <= 4.9 (R released before 2015-04-22) defaulted to gnu89."
+until = "3.2.0"
+cc = "-std=gnu89"
+
+[[rule]]
+why = "GCC 5-7 (R released 2015-04-22 to 2018-05-01) defaulted to gnu11."
+from = "3.2.1"
+until = "3.5.0"
+cc = "-std=gnu11"
+
+[[rule]]
+why = "GCC 8-14 (R released 2018-05-02 to 2025-04-24) defaulted to gnu17."
+from = "3.5.1"
+until = "4.5.0"
+cc = "-std=gnu17"
+
+[[rule]]
+why = "GCC 15 and later (R released from 2025-04-25) default to gnu23."
+from = "4.5.1"
+cc = "-std=gnu23"
+
+# --- linking ----------------------------------------------------------------------
+
+[[rule]]
+why = """GCC < 10 defaulted to -fcommon; R up to 3.6.1 defines some globals in
+several files and does not link without it (bisected: 3.6.1 fails, 3.6.2
+links). Can change the generated code, so only where needed."""
+until = "3.6.1"
+cc = "-fcommon"

@@ -2,6 +2,9 @@ version = 1
 revision = 5
 requires-python = ">=3.12"
 
+[manifest]
+overrides = [{ name = "bench", git = "https://github.com/MatejKocourek/bench.git?rev=139ab198a8b663aeef09531fa29f906053a86173" }]
+
 [[package]]
 name = "attrs"
 version = "26.1.0"
@@ -14,7 +17,7 @@ wheels = [
 [[package]]
 name = "bench"
 version = "0.1.0"
-source = { git = "https://github.com/PRL-PRG/bench.git?rev=4639a83a664901d83db3637bab863374878e96ac#4639a83a664901d83db3637bab863374878e96ac" }
+source = { git = "https://github.com/MatejKocourek/bench.git?rev=139ab198a8b663aeef09531fa29f906053a86173#139ab198a8b663aeef09531fa29f906053a86173" }
 dependencies = [
     { name = "cattrs" },
     { name = "rich" },

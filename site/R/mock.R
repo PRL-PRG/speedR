@@ -161,8 +161,8 @@ MACHINES <- data.frame(
   arch      = c("x86_64", "aarch64", "arm64"),
   cpu       = c("AMD Ryzen 9 7950X (mock)", "Ampere Altra Q80-30 (mock)", "Apple M4 (mock)"),
   kernel    = c("Linux 6.17 (Ubuntu 26.04 LTS)", "Linux 6.17 (Ubuntu 26.04 LTS)", "macOS 26.1"),
-  toolchain = c("gcc 13.3, gfortran 13.3, OpenBLAS 0.3.26 (image sha256:3f1c…)",
-                "gcc 13.3, gfortran 13.3, OpenBLAS 0.3.26 (image sha256:9ab0…)",
+  toolchain = c("gcc 13.3, gfortran 13.3, R internal BLAS (image sha256:3f1c…)",
+                "gcc 13.3, gfortran 13.3, R internal BLAS (image sha256:9ab0…)",
                 "Apple clang 17, gfortran 14.2 (mac.r-project.org), vecLib"),
   profiler  = c("perf (dwarf,32768)", "perf (dwarf,32768)", "samply"),
   profiles  = c("validated", "experimental", "experimental"),
@@ -180,7 +180,7 @@ CONFIG_EXTRA <- list(
   `gc-a`        = c(eval = 1.00, prim = 1.00, mem = 0.90, native = 1.00),
   `gc-b`        = c(eval = 1.00, prim = 1.00, mem = 1.06, native = 1.00),
   `pgo`         = c(eval = 0.91, prim = 0.95, mem = 0.97, native = 1.00),
-  `refblas`     = c(eval = 1.00, prim = 1.00, mem = 1.00, native = 2.60)
+  `openblas`    = c(eval = 1.00, prim = 1.00, mem = 1.00, native = 0.40)
 )
 
 generate_mock <- function(outdir = "data/mock", registry_path = "data/benchmarks.csv") {
@@ -221,7 +221,7 @@ generate_mock <- function(outdir = "data/mock", registry_path = "data/benchmarks
       }
     }
     runs[[run_id]] <<- data.frame(
-      run = run_id, machine = machine, impl = "gnur", version = version,
+      run = run_id, methodology = "0.1", machine = machine, impl = "gnur", version = version,
       kind = kind, config = config, date = date, svn_rev = svn_rev,
       suspect = suspect, sentinel_drift = round(if (suspect) 0.052 else rnorm(1, 0, 0.006), 4),
       n_ok = sum(ok), n_total = nrow(b), stringsAsFactors = FALSE)

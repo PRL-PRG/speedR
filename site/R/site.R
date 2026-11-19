@@ -14,3 +14,5 @@ knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
 
 D <- site_data()
 REF_MACHINE <- D$machines$machine[1]
+METHODOLOGY <- D$methodology
+METHODOLOGY_VERSIONS <- D$methodology_versions
