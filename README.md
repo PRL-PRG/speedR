@@ -22,6 +22,7 @@ Performance*.
 | [`categories/`](categories/) | the perf frame classifier from VMIL'26 (`perf-rules.R`) and the step that turns recordings into category shares |
 | [`machines/`](machines/) | one TOML file per benchmark machine ([how to add one](docs/machines.md)) |
 | [`configs.toml`](configs.toml) | build configurations: default, no-bytecode, LTO, GC variants, PGO, ... |
+| [`methodology/`](methodology/) | methodology versions: every run records the one it was measured under ([rules](methodology/README.md)) |
 | [`docs/`](docs/) | [benchmarking guidelines](docs/guidelines.md) (draft), [machines](docs/machines.md) |
 | [`tests/`](tests/) | Python tests, including the workflow security rules |
 

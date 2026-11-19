@@ -40,7 +40,34 @@ banner <- if (d$mock) {
     "synthetic data, not measurements of R.</div>"
   )
 } else ""
-writeLines(banner, file.path("assets", "_banner.html"))
+
+# the methodology version this site shows, and links to the same page under the
+# others: render.sh puts each version in _site/<version>/, so the script swaps
+# that path segment (a plain `quarto render` has none, and shows no links)
+m <- d$methodology
+others <- setdiff(d$methodology_versions$version, m$version)
+links <- if (length(others)) paste0(
+  " · other versions: ",
+  paste0(sprintf('<a data-v="%s" href="#">%s</a>', others, others), collapse = ", ")
+) else ""
+mbar <- c(
+  sprintf(paste0('<div class="rs-mv" role="note">Methodology <strong>%s</strong> ',
+                 '(%s)%s · <a class="rs-mv-doc" href="#">what this means</a></div>'),
+          m$version, m$status, links),
+  "<script>",
+  sprintf("(function () {
+  var cur = '/%s/', p = location.pathname, i = p.indexOf(cur);
+  var root = i < 0 ? null : p.slice(0, i + 1), rest = i < 0 ? '' : p.slice(i + cur.length);
+  document.querySelectorAll('.rs-mv a[data-v]').forEach(function (a) {
+    if (root === null) { a.hidden = true; } else { a.href = root + a.dataset.v + '/' + rest; }
+  });
+  var doc = document.querySelector('.rs-mv a.rs-mv-doc');
+  doc.href = root === null ? 'methodology.html' : root + cur.slice(1) + 'methodology.html';
+})();", m$version),
+  "</script>"
+)
+writeLines(c(banner, mbar), file.path("assets", "_banner.html"))
+message("pre-render: methodology ", m$version, " (", m$status, ")")
 
 # one page per benchmark: benchmarks/<suite>--<name with / as -->.qmd
 old <- list.files("benchmarks", pattern = "--.*\\.qmd$", full.names = TRUE)

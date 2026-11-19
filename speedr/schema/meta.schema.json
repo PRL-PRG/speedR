@@ -7,6 +7,7 @@
   "required": [
     "schema_version",
     "run_id",
+    "methodology",
     "machine",
     "impl",
     "version",
@@ -28,6 +29,11 @@
     "run_id": {
       "type": "string",
       "pattern": "^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{6}$"
+    },
+    "methodology": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+$",
+      "description": "The methodology version the run was measured under (methodology/versions.csv); results of different versions are never compared"
     },
     "machine": {
       "type": "string",

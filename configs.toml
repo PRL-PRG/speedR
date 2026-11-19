@@ -1,22 +1,23 @@
 # Build configurations. Every build starts from the same base, which the
-# builder owns (phase 2):
+# builder owns (phase 2), and which methodology/<version>.qmd describes: R's
+# default build,
 #
-#   ./configure --prefix=/opt/r/<build_id> --without-recommended-packages \
-#               --with-x=no --with-blas=-lopenblas --with-lapack=-lopenblas
-#   CFLAGS=CXXFLAGS=FFLAGS=FCFLAGS="-O2 -g"
+#   ./configure --prefix=/opt/r/<build_id>        (R picks -g -O2, internal
+#                                                   BLAS/LAPACK, recommended packages)
 #
-# with every BLAS/OpenMP thread count pinned to 1 at run time. A config adds
+# with GCC 16 behaving as upstream GCC, the C dialect of the release's time, and
+# every BLAS/OpenMP thread count pinned to 1 at run time. A config adds
 # configure arguments, replaces the compiler flags, or sets run-time
 # environment. `planned` configs are listed so the dashboard and the grant
 # milestones can refer to them; the pipeline only builds `active` ones.
 
 [default]
-description = "Vanilla build: -O2 -g, OpenBLAS linked by name, single-threaded"
+description = "R's default build: -g -O2, internal BLAS/LAPACK, recommended packages, single-threaded"
 status = "active"
 
-[refblas]
-description = "R's reference BLAS instead of OpenBLAS"
-configure = ["--without-blas", "--without-lapack"]
+[openblas]
+description = "OpenBLAS instead of R's internal BLAS/LAPACK"
+configure = ["--with-blas=-lopenblas", "--with-lapack=-lopenblas"]
 
 [no-bytecode]
 description = "Same binary as default, byte-code compiler and JIT off"

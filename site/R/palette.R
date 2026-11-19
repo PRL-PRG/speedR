@@ -107,7 +107,7 @@ SUITES <- c("shootout", "areWeFast", "RealThing", "SpeedTest", "riposte",
             "mathkernel", "R-benchmark-25", "misc")
 SUITE_COLORS <- setNames(SERIES[seq_along(SUITES)], SUITES)
 
-CONFIGS <- c("default", "no-bytecode", "lto", "gc-a", "gc-b", "pgo", "refblas")
+CONFIGS <- c("default", "no-bytecode", "lto", "gc-a", "gc-b", "pgo", "openblas")
 CONFIG_COLORS <- setNames(SERIES[c(1, 2, 3, 4, 5, 6, 7)], CONFIGS)
 
 # Mapping consumed by assets/theme-sync.js (light hex -> dark hex).

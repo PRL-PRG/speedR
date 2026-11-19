@@ -74,9 +74,9 @@ jobs:
       - uses: quarto-dev/quarto-actions/setup@v2
         with:
           version: 1.11.9
-      - name: Render
+      - name: Render (one site per methodology version)
         working-directory: site
-        run: quarto render
+        run: ./render.sh
       - uses: actions/upload-artifact@v7
         with:
           name: site

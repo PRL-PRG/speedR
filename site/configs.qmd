@@ -23,16 +23,16 @@ eff <- do.call(rbind, lapply(cfg_versions, function(v) {
 
 ```{r}
 cfg_def <- data.frame(
-  Configuration = c("default", "no-bytecode", "lto", "gc-a", "gc-b", "pgo", "refblas"),
+  Configuration = c("default", "no-bytecode", "lto", "gc-a", "gc-b", "pgo", "openblas"),
   Kind = c("build", "build + runtime", "build", "runtime", "runtime", "build", "build"),
   `What changes` = c(
-    "-O2 -g, byte-compiled base packages, JIT level 3, OpenBLAS (single thread)",
+    "R's default build: -g -O2, byte-compiled base packages, JIT level 3, internal BLAS/LAPACK, recommended packages",
     "--disable-byte-compiled-packages and R_ENABLE_JIT=0: the AST interpreter only",
     "--enable-lto: link-time optimisation of the interpreter",
     "GC tuning A: larger initial heap (R_NSize / R_VSize) [values to be agreed]",
     "GC tuning B: aggressive growth (R_GC_MEM_GROW) [values to be agreed]",
     "--enable-pgo: profile-guided build trained on the PGO training set (grant milestone M5)",
-    "R's bundled reference BLAS/LAPACK instead of OpenBLAS"),
+    "OpenBLAS (single thread) instead of R's internal BLAS/LAPACK"),
   check.names = FALSE)
 rs_table(cfg_def, pagination = FALSE, sortable = FALSE,
          columns = list(`What changes` = colDef(minWidth = 420)))

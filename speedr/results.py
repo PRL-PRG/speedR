@@ -13,11 +13,11 @@ import csv
 import json
 from pathlib import Path
 
-from . import meta
+from . import meta, methodology
 
 INDEX_TABLES: dict[str, list[str]] = {
-    "runs.csv": ["run", "machine", "impl", "version", "kind", "config", "date", "svn_rev",
-                 "suspect", "sentinel_drift", "n_ok", "n_total"],
+    "runs.csv": ["run", "methodology", "machine", "impl", "version", "kind", "config", "date",
+                 "svn_rev", "suspect", "sentinel_drift", "n_ok", "n_total"],
     "machines.csv": ["machine", "os", "arch", "cpu", "kernel", "toolchain", "profiler",
                      "profiles", "wake", "first_version"],
     "benchmarks.csv": ["id", "suite", "name", "min_version"],
@@ -46,9 +46,12 @@ def check(root: Path) -> list[str]:
         missing = [c for c in columns if c not in _header(path)]
         if missing:
             problems.append(f"{path}: missing columns {missing}")
+    known = {m.version for m in methodology.load_all()}
     for path in sorted((root / "runs").glob("*/*/*/*/*/meta.json")):
         m = json.loads(path.read_text())
         problems += [f"{path}: {e}" for e in meta.errors(m)]
+        if m.get("methodology") not in known:
+            problems.append(f"{path}: unknown methodology version {m.get('methodology')!r}")
         machine, impl, version, config, run = path.parent.relative_to(root / "runs").parts
         expected = (m.get("machine"), m.get("impl"), m.get("version"), m.get("config"),
                     m.get("run_id"))

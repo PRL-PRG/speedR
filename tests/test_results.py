@@ -38,3 +38,10 @@ def test_misplaced_run(tmp_path):
     dst.parent.mkdir()
     src.rename(dst)
     assert any("directory does not match" in p for p in results.check(tmp_path))
+
+
+def test_unknown_methodology(tmp_path):
+    make_checkout(tmp_path)
+    path = next((tmp_path / "runs").glob("*/*/*/*/*/meta.json"))
+    path.write_text(json.dumps(json.loads(path.read_text()) | {"methodology": "9.9"}))
+    assert any("unknown methodology version '9.9'" in p for p in results.check(tmp_path))

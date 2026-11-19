@@ -23,19 +23,41 @@ results_dir <- function() {
 
 cache_path <- function() file.path(site_root(), "data", "_cache", "site.rds")
 
+# Methodology versions (../methodology/versions.csv). The site is rendered once
+# per version (render.sh) and shows only runs measured under it:
+# SPEEDR_METHODOLOGY picks the version, the newest by default.
+methodology_versions <- function() {
+  v <- utils::read.csv(file.path(site_root(), "..", "methodology", "versions.csv"),
+                       stringsAsFactors = FALSE, colClasses = "character")
+  v[order(numeric_version(v$version)), ]
+}
+
+methodology <- function() {
+  v <- methodology_versions()
+  want <- Sys.getenv("SPEEDR_METHODOLOGY", v$version[nrow(v)])
+  if (!want %in% v$version) stop("unknown methodology version ", want)
+  as.list(v[v$version == want, ])
+}
+
 #' Read the results index and derive everything the pages need. Called once by
 #' the pre-render step; pages call site_data(), which reads the cache.
 build_cache <- function() {
   source(file.path(site_root(), "R", "stats.R"), local = TRUE)
   dir <- results_dir()
-  runs <- utils::read.csv(file.path(dir, "runs.csv"), stringsAsFactors = FALSE)
+  meth <- methodology()
+  runs <- utils::read.csv(file.path(dir, "runs.csv"), stringsAsFactors = FALSE,
+                          colClasses = c(methodology = "character"))
+  # never mix methodologies (the synthetic mock stands in for any version)
+  if (!is_mock()) runs <- runs[runs$methodology == meth$version, ]
   runs$date <- as.Date(runs$date)
   machines <- utils::read.csv(file.path(dir, "machines.csv"), stringsAsFactors = FALSE)
   benchmarks <- utils::read.csv(file.path(dir, "benchmarks.csv"), stringsAsFactors = FALSE)
   events <- utils::read.csv(file.path(dir, "events.csv"), stringsAsFactors = FALSE)
   events$date <- as.Date(events$date)
   samples <- utils::read.csv(file.path(dir, "samples.csv"), stringsAsFactors = FALSE)
+  samples <- samples[samples$run %in% runs$run, ]
   profiles <- utils::read.csv(file.path(dir, "profiles.csv"), stringsAsFactors = FALSE)
+  profiles <- profiles[profiles$run %in% runs$run, ]
 
   est <- estimate_runs(samples)
 
@@ -86,6 +108,7 @@ unattributed,Unattributed", stringsAsFactors = FALSE)
 
   saveRDS(list(
     generated = Sys.time(), mock = is_mock(),
+    methodology = meth, methodology_versions = methodology_versions(),
     runs = runs, machines = machines, benchmarks = benchmarks, events = events,
     est = est, baselines = base, release_timeline = rel_tl, suite_timeline = suite_tl,
     devel_timeline = devel_tl, changes = changes, profiles = profiles
