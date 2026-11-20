@@ -56,6 +56,6 @@ rs_table(
 [All R-devel nights →](devel.qmd)
 
 ::: {.rs-notes}
-- `r nrow(D$benchmarks)` benchmarks, `r length(unique(D$runs$version[D$runs$kind == "release"]))` R releases`r if (HAS_DEVEL) " and every night of R-devel" else ""`, on dedicated machines.
+- `r nrow(D$benchmarks)` benchmarks, `r n <- length(unique(D$runs$version[D$runs$kind == "release"])); paste(n, ngettext(n, "R release", "R releases"))``r if (HAS_DEVEL) " and every night of R-devel" else ""`, on dedicated machines.
 - 1× is **R `r base_v`**, the R in `r lts_name(base_v)` LTS, on the same machine. The geometric mean uses only benchmarks every release can run. [Methodology](methodology.qmd)
 :::
