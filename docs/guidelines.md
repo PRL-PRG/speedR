@@ -33,7 +33,7 @@ project and will be refined as the pipeline is built; sections marked
 
 ## 3. Running benchmarks
 
-- **Run design.** Separate R processes per benchmark (2 under methodology 0.2),
+- **Run design.** Separate R processes per benchmark (3 under methodology 0.2),
   each running 1 warm-up and 4 measured iterations (r-benchmarks' own default is 3 processes of 2 + 3;
   speedR's drivers set theirs). The process is the unit of replication: the spread
   between processes is larger than the spread within one.

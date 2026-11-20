@@ -7,13 +7,16 @@
 #   speedr-node env|id SOURCE                 the build settings | the build id
 #   speedr-node configure SOURCE              configure only; print config.h
 #   speedr-node build SOURCE                  build R (cached by build id) in $work/r/<id>
+#   speedr-node sentinel                      the sentinel alone: does this box measure
+#                                             as its machine should?
 #   speedr-node run SOURCE [timing.py args]   sentinel, then the timing pass ->
 #                                             $work/results/LABEL/RUN_ID/, copied to
 #                                             the controller's spool
 #
-# A run is recorded for machine $SPEEDR_MACHINE, by default the Slurm partition
-# (machines/<name>.toml). SOURCE is a release (4.6.2), `devel` or `patched` (today's snapshot, kept as
-# devel-r<svn revision>), such a label (devel-r90937), or a source tarball. How a
+# The machine is $SPEEDR_MACHINE, by default the Slurm partition
+# (machines/<name>.toml). SOURCE is a release (4.6.2), `devel` or `patched`
+# (today's snapshot, kept as devel-r<svn revision>), such a label
+# (devel-r90937), or a source tarball. How a
 # version is built: build/settings.toml. Data (sources, logs, results) goes to
 # $SPEEDR_WORK (~/speedr-work); this checkout needs `uv sync` once.
 set -euo pipefail
@@ -113,6 +116,44 @@ in_image() {  # LABEL ARGS... -> build/build-r.sh ARGS in the image, with this v
         "$repo/build/build-r.sh" "$work/src/R-$l.tar.gz" "$@"
 }
 
+# the container runs under dockerd, not this script: when Slurm cancels the job
+# (SIGTERM), stop it too
+name=""
+trap '[ -n "$name" ] && docker kill "$name" >/dev/null 2>&1; exit 143' TERM INT
+
+bench() {  # NAME R-BUILD-ID TIMING-ARGS... -> drivers/timing.py in the image, on the bench CPU
+    name=speedr-$1-$(date +%s)-$$; local r=$2; shift 2
+    # setup() caches inputs in the benchmarks' data/ folders, some per R
+    # version (Matrix objects): start every pass without them
+    find "$repo/.venv" -path '*/rbench/benchmarks/*/data' -prune -exec rm -rf {} +
+    # seccomp=unconfined: docker's default profile refuses the personality
+    # call `setarch -R` makes to switch ASLR off for R
+    docker run --rm --name "$name" --user "$(id -u):$(id -g)" -e HOME=/tmp --network none \
+        --cpuset-cpus "$bench_cpus" --cpuset-mems 0 --security-opt seccomp=unconfined \
+        -v "$repo:$repo" -v "$work:$work" -w "$repo" "$image" \
+        .venv/bin/python drivers/timing.py --R "$work/r/$r/bin/R" --no-progress "$@" &
+    local rc=0; wait $! || rc=$?   # in the background, so the trap runs as soon as the signal arrives
+    return $rc
+}
+
+machine() {
+    local m=${SPEEDR_MACHINE:-${SLURM_JOB_PARTITION:-}}
+    [ -n "$m" ] || { echo "no machine: set SPEEDR_MACHINE (machines/<name>.toml)" >&2; exit 2; }
+    echo "$m"
+}
+
+sentinel() {  # MACHINE DIR -> DIR/sentinel.json; exit status 3: failed
+    local version include runs iterations warmups id rc=0
+    eval "$("$repo/.venv/bin/speedr" sentinel --plan)"
+    id=$(build_id "$(resolve "$version")")
+    [ -x "$work/r/$id/bin/R" ] || "$0" build "$version" >&2
+    bench sentinel "$id" --include "$include" --runs "$runs" --iterations "$iterations" \
+        --warmups "$warmups" --json "$2/sentinel-timing.json" --dir "$2/sentinel-exec" >/dev/null || true
+    "$repo/.venv/bin/speedr" sentinel "$2/sentinel-timing.json" "$1" > "$2/sentinel.json" || rc=$?
+    echo "sentinel on $(hostname -s): $(tr -d '\n ' < "$2/sentinel.json" | grep -o '"deviation":[^,]*,"status":"[a-z]*"')"
+    return $rc
+}
+
 cmd=${1:-}; shift || true
 case $cmd in
 image)
@@ -147,15 +188,15 @@ build)
     } > "$prefix/speedr-build.env"
     echo "R $l: built $id"
     ;;
+sentinel)
+    out=$work/sentinel/$(date -u +%Y%m%dT%H%M%SZ); mkdir -p "$out"
+    sentinel "$(machine)" "$out" && echo "$out/sentinel.json"
+    ;;
 run)
     l=$(resolve "$1"); shift
-    machine=${SPEEDR_MACHINE:-${SLURM_JOB_PARTITION:-}}
-    [ -n "$machine" ] || { echo "no machine: set SPEEDR_MACHINE (machines/<name>.toml)"; exit 2; }
+    machine=$(machine)
     id=$(build_id "$l")
     [ -x "$work/r/$id/bin/R" ] || { echo "R $l: no build $id; run '$0 build $l' first"; exit 1; }
-    eval "$("$repo/.venv/bin/speedr" sentinel --plan)"   # version include runs iterations warmups
-    sentinel_id=$(build_id "$(resolve "$version")")
-    [ -x "$work/r/$sentinel_id/bin/R" ] || "$0" build "$version"
     run_id=$(date -u +%Y%m%dT%H%M%SZ)-$(openssl rand -hex 3)
     out=$work/results/$l/$run_id; mkdir -p "$out"
     cp "$work/r/$id/speedr-build.env" "$out/"
@@ -163,30 +204,7 @@ run)
     started=$(date -u +%Y-%m-%dT%H:%M:%SZ) uptime=$(cut -d' ' -f1 /proc/uptime)
     echo "R $l (build $id) on $machine: run $run_id on CPU $bench_cpus, kernel $(uname -r)"
 
-    # the container runs under dockerd, not this process: when Slurm cancels
-    # the job (SIGTERM), stop it too
-    name=""
-    trap '[ -n "$name" ] && docker kill "$name" >/dev/null 2>&1; exit 143' TERM INT
-    bench() {  # NAME R-BUILD-ID TIMING-ARGS... -> drivers/timing.py in the image, on the bench CPU
-        name=speedr-$1-$run_id; local r=$2; shift 2
-        # setup() caches inputs in the benchmarks' data/ folders, some per R
-        # version (Matrix objects): start every pass without them
-        find "$repo/.venv" -path '*/rbench/benchmarks/*/data' -prune -exec rm -rf {} +
-        # seccomp=unconfined: docker's default profile refuses the personality
-        # call `setarch -R` makes to switch ASLR off for R
-        docker run --rm --name "$name" --user "$(id -u):$(id -g)" -e HOME=/tmp --network none \
-            --cpuset-cpus "$bench_cpus" --cpuset-mems 0 --security-opt seccomp=unconfined \
-            -v "$repo:$repo" -v "$work:$work" -w "$repo" "$image" \
-            .venv/bin/python drivers/timing.py --R "$work/r/$r/bin/R" --no-progress "$@" &
-        local rc=0; wait $! || rc=$?   # in the background, so the trap runs as soon as the signal arrives
-        return $rc
-    }
-
-    # the sentinel: is this box performing as its machine should?
-    bench sentinel "$sentinel_id" --include "$include" --runs "$runs" --iterations "$iterations" \
-        --warmups "$warmups" --json "$out/sentinel-timing.json" --dir "$out/sentinel-exec" >/dev/null || true
-    rc=0; "$repo/.venv/bin/speedr" sentinel "$out/sentinel-timing.json" "$machine" > "$out/sentinel.json" || rc=$?
-    echo "sentinel: $(tr -d '\n ' < "$out/sentinel.json" | grep -o '"deviation":[^,]*,"status":"[a-z]*"')"
+    rc=0; sentinel "$machine" "$out" || rc=$?
     if [ "$rc" = 3 ]; then
         echo "sentinel failed: not running the timing pass on $(hostname -s)"
         if [ -n "${SLURM_JOB_ID:-}" ]; then   # keep the job, held, for when the box is fixed
@@ -218,5 +236,5 @@ run)
         echo "results: $out, copied to the controller's spool"
     exit $rc
     ;;
-*) echo "usage: $0 image | env|id|configure|build SOURCE | run SOURCE [timing args]" >&2; exit 2 ;;
+*) echo "usage: $0 image | env|id|configure|build SOURCE | sentinel | run SOURCE [timing args]" >&2; exit 2 ;;
 esac

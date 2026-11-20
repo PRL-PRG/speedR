@@ -13,7 +13,11 @@ import statistics
 from . import ingest, machines
 
 VERSION = "4.5.2"
-BENCHMARKS = ["areWeFast/bounce", "areWeFast/mandelbrot"]
+# short and steady (iterations within 1% of each other), each stressing another
+# part of R: calls and the byte-code interpreter, scalar floating point, vector
+# arithmetic over memory, and a mix
+BENCHMARKS = ["areWeFast/bounce", "shootout/nbody/nbody", "mathkernel/DoubleVecAdd-T1",
+              "R-benchmark-25/Programmation/att3_1"]
 RUN_DESIGN = {"runs": 2, "iterations": 8, "warmups": 3}
 SUSPECT = 0.03
 FAIL = 0.10

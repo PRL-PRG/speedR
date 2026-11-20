@@ -54,11 +54,11 @@ repetition and process management belong to the shared harness, driven by the
 
 ## How a run is measured
 
-- Every benchmark runs in **2 separate R processes**, each doing 1 warm-up and
+- Every benchmark runs in **3 separate R processes**, each doing 1 warm-up and
   4 measured iterations, in a fixed shuffled order, as `R --slave --vanilla`
-  under `setarch -R`. (Two processes keep a pass over a release to about an
-  hour and a half; with address-space randomisation off, processes of one
-  build vary little. Whether 1.0 needs more is decided from these results.)
+  under `setarch -R`. (Three processes keep a pass over a recent release to
+  about an hour; with address-space randomisation off, processes of one build
+  vary little. Whether 1.0 needs more is decided from these results.)
 - Runs execute in the build's container, pinned to one isolated CPU core, with
   no network.
 - The machine runs a pinned kernel, with the benchmark core isolated from the
@@ -95,7 +95,7 @@ repetition and process management belong to the shared harness, driven by the
 
 - A benchmark's time on a run is the **geometric mean over processes** of
   each process's median measured iteration. Its interval is a 95% interval
-  with the process as the unit of replication (with two processes, a rough
+  with the process as the unit of replication (with three processes, a rough
   one).
 - A **speedup** is *time(A) / time(B)*: above 1× means B is faster. Speedups
   are only ever computed between runs on the **same machine** and under the
