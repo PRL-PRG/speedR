@@ -41,9 +41,9 @@ docker() { if [ -w /var/run/docker.sock ]; then command docker "$@"; else sudo -
 
 tarball_file() {  # TARBALL NAME -> first line of the top-level file NAME
     # (top-level only: R's sources have more files called VERSION)
-    local m; m=$(tar -tzf "$1" | awk -v n="$2" '$0 ~ "^[^/]+/" n "$" && !f { print; f = 1 }')
+    local m; m=$(tar --warning=no-unknown-keyword -tzf "$1" | awk -v n="$2" '$0 ~ "^[^/]+/" n "$" && !f { print; f = 1 }')
     [ -n "$m" ] || return 0
-    tar -xzOf "$1" "$m" | head -n 1
+    tar --warning=no-unknown-keyword -xzOf "$1" "$m" | head -n 1
 }
 
 snapshot() {  # devel|patched -> label of today's snapshot, downloaded into src/
@@ -82,7 +82,7 @@ resolve() {  # SOURCE -> label; its tarball is then $work/src/R-<label>.tar.gz
 source_version() { tarball_file "$work/src/R-$1.tar.gz" VERSION; }   # LABEL -> its VERSION line
 
 source_date() {  # LABEL -> the date of its source (SVN-REVISION's Last Changed Date)
-    tar -xzOf "$work/src/R-$1.tar.gz" --wildcards '*/SVN-REVISION' | sed -n 's/^Last Changed Date: *//p' | head -1
+    tar --warning=no-unknown-keyword -xzOf "$work/src/R-$1.tar.gz" --wildcards '*/SVN-REVISION' | sed -n 's/^Last Changed Date: *//p' | head -1
 }
 
 extra_pkg_file() {  # LABEL -> the extra package's tarball current on CRAN at that date
