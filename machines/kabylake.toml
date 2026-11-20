@@ -1,0 +1,17 @@
+# The Intel Core i7-7700K boxes: Slurm partition `kabylake` of the prlprg-bench
+# cluster (MSI Z270M Mortar, BIOS 1.60, 32 GB). Their results are one series;
+# the sentinel checks each run's box against the reference below.
+name = "kabylake"
+os = "linux"
+arch = "x86_64"
+cpu = "Intel Core i7-7700K at a fixed 4.2 GHz (turbo and SMT off), 32 GB"
+cores = "3"                   # isolated core the benchmarks are pinned to
+runtime = "docker"
+profiler = "perf"
+profiles = "validated"        # perf on x86-64 is the method VMIL'26 validated
+track_devel = true
+wake = "wol"
+
+# Reference times (ms) of the sentinel benchmarks under R 4.5.2: medians of
+# its calibration runs. Empty: not calibrated, every run passes.
+[sentinel]

@@ -106,6 +106,11 @@
         },
         "cached": {
           "type": "boolean"
+        },
+        "source_date": {
+          "type": "string",
+          "format": "date",
+          "description": "date of the R source (SVN Last Changed Date)"
         }
       }
     },
@@ -140,6 +145,11 @@
           "items": {
             "type": "string"
           }
+        },
+        "speedr_commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$",
+          "description": "speedR commit that ran it"
         }
       }
     },
@@ -148,8 +158,7 @@
       "required": [
         "runs",
         "iterations",
-        "warmups",
-        "seed"
+        "warmups"
       ],
       "additionalProperties": false,
       "properties": {
@@ -219,41 +228,93 @@
             },
             "report": {}
           }
+        },
+        "node": {
+          "type": "string",
+          "description": "the box of the machine (cluster) that ran it"
+        },
+        "slurm_job": {
+          "type": "string"
+        },
+        "fingerprint": {
+          "type": "object",
+          "description": "bench's fingerprint of the system"
+        },
+        "probe": {
+          "type": "object",
+          "required": [
+            "status"
+          ],
+          "description": "the node's native probe before the job (prlprg-bench prolog)",
+          "properties": {
+            "status": {
+              "enum": [
+                "ok",
+                "suspect",
+                "failed",
+                "uncalibrated"
+              ]
+            },
+            "deviation": {
+              "type": "number"
+            },
+            "values": {
+              "type": "object"
+            },
+            "reference": {
+              "type": "object"
+            },
+            "node": {
+              "type": "string"
+            }
+          }
         }
       }
     },
     "sentinel": {
       "type": "object",
       "required": [
-        "benchmark",
-        "time_ms",
-        "drift",
-        "suspect"
+        "version",
+        "times_ms",
+        "status"
       ],
       "additionalProperties": false,
+      "description": "the sentinel before the timing pass (speedr/sentinel.py)",
       "properties": {
-        "benchmark": {
+        "version": {
           "type": "string"
         },
-        "time_ms": {
-          "type": "number",
-          "exclusiveMinimum": 0
+        "times_ms": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          }
         },
-        "median_ms": {
-          "type": [
-            "number",
-            "null"
-          ]
+        "reference_ms": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          }
         },
-        "drift": {
+        "deviation": {
           "type": [
             "number",
             "null"
           ],
-          "description": "time_ms / median_ms - 1"
+          "description": "geometric mean of time / reference, minus 1"
         },
-        "suspect": {
-          "type": "boolean"
+        "status": {
+          "enum": [
+            "ok",
+            "suspect",
+            "failed",
+            "uncalibrated"
+          ]
+        },
+        "error": {
+          "type": "string"
         }
       }
     },

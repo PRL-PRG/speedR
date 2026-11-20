@@ -9,12 +9,6 @@ def test_repository_machines_are_valid():
     assert len({m.name for m in ms}) == len(ms)
 
 
-def test_runner_labels():
-    m = machines.Machine(name="box-1", os="linux", arch="x86_64", wake="always-on",
-                         runtime="docker", profiler="perf")
-    assert m.runner_labels == ["self-hosted", "speedr", "m-box-1", "os-linux", "arch-x86_64"]
-
-
 def write(tmp_path, name, body):
     p = tmp_path / f"{name}.toml"
     p.write_text(body)
@@ -33,7 +27,7 @@ wake = "{wake}"
 
 @pytest.mark.parametrize("fields, message", [
     (dict(os="macos", runtime="docker"), "docker runtime is Linux-only"),
-    (dict(wake="wol"), "needs wake_secret"),
+    (dict(extra='[sentinel]\n"a/b" = -1'), "sentinel times must be positive"),
     (dict(wake="carrier-pigeon"), "wake must be one of"),
     (dict(extra='colour = "red"'), "unknown keys"),
 ])

@@ -45,7 +45,9 @@ banner <- if (d$mock) {
 # others: render.sh puts each version in _site/<version>/, so the script swaps
 # that path segment (a plain `quarto render` has none, and shows no links)
 m <- d$methodology
-others <- setdiff(d$methodology_versions$version, m$version)
+all_versions <- paste(d$methodology_versions$version, collapse = " ")
+rendered <- strsplit(Sys.getenv("SPEEDR_RENDERED", all_versions), " ")[[1]]
+others <- setdiff(intersect(d$methodology_versions$version, rendered), m$version)
 links <- if (length(others)) paste0(
   " · other versions: ",
   paste0(sprintf('<a data-v="%s" href="#">%s</a>', others, others), collapse = ", ")
