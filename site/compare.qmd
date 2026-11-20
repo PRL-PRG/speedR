@@ -17,10 +17,14 @@ runs$date <- as.character(runs$date)
 est <- D$est[D$est$run %in% runs$run, c("run", "benchmark", "log_mean", "log_se", "est_ms")]
 est$log_mean <- round(est$log_mean, 5); est$log_se <- round(est$log_se, 5); est$est_ms <- round(est$est_ms, 2)
 pg <- D$profiles[D$profiles$run %in% runs$run, ]
-pg <- aggregate(share ~ run + benchmark + group, data = pg, FUN = sum)
-prof <- stats::reshape(pg, idvar = c("run", "benchmark"), timevar = "group", direction = "wide")
-names(prof) <- sub("^share\\.", "", names(prof))
-prof[GROUPS] <- lapply(prof[GROUPS], round, 4)
+prof <- data.frame(run = character(), benchmark = character())
+prof[GROUPS] <- list(numeric())
+if (nrow(pg)) {
+  pg <- aggregate(share ~ run + benchmark + group, data = pg, FUN = sum)
+  prof <- stats::reshape(pg, idvar = c("run", "benchmark"), timevar = "group", direction = "wide")
+  names(prof) <- sub("^share\\.", "", names(prof))
+  prof[GROUPS] <- lapply(prof[GROUPS], round, 4)
+}
 ojs_define(runs = runs[, c("run", "machine", "version", "kind", "config", "date", "label", "svn_rev")],
            est = est, prof = prof,
            benchmarks = D$benchmarks[, c("id", "suite")],

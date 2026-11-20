@@ -8,7 +8,8 @@ speedR-results (layout: results.py).
         sentinel.json      the sentinel before it (speedr sentinel)
         probe.json         the node's probe before the job (prlprg-bench prolog)
 
-`speedr-node` copies run.env last, so a run without it is still arriving.
+`speedr-node` copies run.env last, so a run without it is still arriving; a
+run whose timing pass failed (`exit` in run.env) is left in the spool.
 Every new run becomes <methodology>/<impl>/<machine>/<version>/<config>/<run_id>/
 (meta.json, samples.csv, iterations.csv); then the index of each methodology
 that got new runs is rebuilt from all of its runs.
@@ -254,7 +255,7 @@ def ingest(spool: Path, root: Path) -> list[Path]:
     have = {p.parent.name for p in root.glob("*/*/*/*/*/*/meta.json")}
     new = []
     for run_env in sorted(spool.glob("*/*/run.env")):
-        if run_env.parent.name not in have:
+        if run_env.parent.name not in have and read_env(run_env).get("exit") == "0":
             new.append(ingest_run(run_env.parent, root))
     for mdir in sorted({p.parents[4] for p in new}):
         rebuild_index(mdir)

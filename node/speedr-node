@@ -160,7 +160,7 @@ run)
     out=$work/results/$l/$run_id; mkdir -p "$out"
     cp "$work/r/$id/speedr-build.env" "$out/"
     [ -r "$probe" ] && cp "$probe" "$out/"
-    started=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    started=$(date -u +%Y-%m-%dT%H:%M:%SZ) uptime=$(cut -d' ' -f1 /proc/uptime)
     echo "R $l (build $id) on $machine: run $run_id on CPU $bench_cpus, kernel $(uname -r)"
 
     # the container runs under dockerd, not this process: when Slurm cancels
@@ -205,7 +205,7 @@ run)
         echo "started=$started"; echo "finished=$(date -u +%Y-%m-%dT%H:%M:%SZ)"; echo "exit=$rc"
         echo "kernel=$(uname -r)"; echo "cmdline=$(cat /proc/cmdline)"
         echo "os_release=$(. /etc/os-release && echo "$PRETTY_NAME")"
-        echo "boot_id=$(cat /proc/sys/kernel/random/boot_id)"; echo "uptime_s=$(cut -d' ' -f1 /proc/uptime)"
+        echo "boot_id=$(cat /proc/sys/kernel/random/boot_id)"; echo "uptime_s=$uptime"
         echo "cpuset=$bench_cpus"
         echo "source_sha256=$(sha256sum "$work/src/R-$l.tar.gz" | cut -d' ' -f1)"
         echo "speedr=$(git -C "$repo" rev-parse HEAD)"

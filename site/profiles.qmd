@@ -6,6 +6,22 @@ subtitle: "Where the interpreter spends its time"
 ```{r}
 #| include: false
 source("R/site.R")
+```
+
+```{r}
+#| eval: !expr "!HAS_PROFILES"
+not_yet("No profiles have been recorded under this methodology version yet: the perf pass is not part of it.")
+```
+
+```{r}
+#| include: false
+#| eval: !expr "!HAS_PROFILES"
+knitr::knit_exit()
+```
+
+```{r}
+#| include: false
+source("R/site.R")
 m <- REF_MACHINE
 pr <- merge(D$profiles, D$runs[, c("run", "machine", "version", "kind", "config", "date")], by = "run")
 pr <- pr[pr$kind == "release", ]

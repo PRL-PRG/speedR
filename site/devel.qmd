@@ -6,6 +6,22 @@ subtitle: "Every night, the newest R-devel revision against the latest release"
 ```{r}
 #| include: false
 source("R/site.R")
+```
+
+```{r}
+#| eval: !expr "!HAS_DEVEL"
+not_yet("No R-devel nights have been measured under this methodology version yet.")
+```
+
+```{r}
+#| include: false
+#| eval: !expr "!HAS_DEVEL"
+knitr::knit_exit()
+```
+
+```{r}
+#| include: false
+source("R/site.R")
 m <- REF_MACHINE
 dtl <- D$devel_timeline[D$devel_timeline$machine == m, ]
 dtl <- dtl[order(dtl$date), ]

@@ -8,7 +8,7 @@ import rbench as rb
 from bench import Context, Params, Thermal
 
 # r-benchmarks' own defaults are 3 runs x 5 iterations, 2 of them warm-up.
-RUN_DESIGN = {"runs": 5, "iterations": 5, "warmups": 1}
+RUN_DESIGN = {"runs": 2, "iterations": 5, "warmups": 1}   # methodology 0.2
 
 
 class TimingParams(rb.RbenchHarnessParams):

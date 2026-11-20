@@ -41,6 +41,7 @@ div(class = "rs-card",
 ```
 
 ```{r}
+#| eval: !expr HAS_PROFILES
 latest <- do.call(rbind, lapply(ms$machine, function(mm) {
   r <- rel[rel$machine == mm, ]
   lr <- r[which.max(r$date), ]

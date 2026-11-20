@@ -49,15 +49,16 @@ not need a benchmark machine to work on it.
 
 ## Security
 
-The benchmark machines and the scheduler are **self-hosted GitHub Actions
-runners on a public repository**. Code from a pull request must never reach
-them:
+The benchmark machines run in a private Slurm cluster; nothing in this
+public repository starts work on them. Code from a pull request must never
+reach them:
 
-- Workflows that run on self-hosted runners are triggered only by `schedule`,
-  `workflow_dispatch` or `workflow_call` from `main`, never by `pull_request`
-  or `pull_request_target`. `tests/test_workflows.py` enforces this.
-- Benchmark machines hold no write credentials. Only the scheduler can push to
-  speedR-results.
+- The machines run only commits a maintainer checked out on them, and jobs
+  only from accounts of the cluster. No workflow here may run on a
+  self-hosted runner when triggered by `pull_request` or
+  `pull_request_target`; `tests/test_workflows.py` enforces this.
+- Benchmark machines hold no write credentials. Only the controller can push
+  to speedR-results (a deploy key for that repository alone).
 
 If you find a security problem, please do not open a public issue. Contact
 the maintainers privately through GitHub's *Report a vulnerability* button on

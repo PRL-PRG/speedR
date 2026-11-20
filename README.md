@@ -8,24 +8,24 @@ the results as a static dashboard, in the spirit of
 [R Consortium](https://www.r-consortium.org) ISC grant, *Measuring R
 Performance*.
 
-> **Status: early development.** The dashboard renders synthetic data only
-> (every page says so). Nothing here is a measurement of R yet. See
-> [Roadmap](#roadmap).
+> **Status: early development.** The first measurements (methodology 0.2,
+> a draft) are on the dashboard, <https://prl-prg.github.io/speedR-results/>.
+> See [Roadmap](#roadmap).
 
 ## What is in this repository
 
 | path | what |
 |---|---|
 | [`site/`](site/) | the dashboard: Quarto + R, static ([README](site/README.md)) |
-| [`speedr/`](speedr/) | the pipeline (Python): identifiers, machine registry, run metadata, the suite pin; build/ingest stages to come |
+| [`speedr/`](speedr/) | the pipeline (Python): identifiers, machine registry, run metadata, the suite pin, build settings, the sentinel, the ingest into speedR-results |
 | [`drivers/`](drivers/) | the timing and profile passes, built on r-benchmarks' `rbench` and `rbench.perf` |
 | [`categories/`](categories/) | the perf frame classifier from VMIL'26 (`perf-rules.R`) and the step that turns recordings into category shares |
-| [`machines/`](machines/) | one TOML file per benchmark machine ([how to add one](docs/machines.md)) |
+| [`machines/`](machines/) | one TOML file per machine: a set of identical boxes, with the sentinel's reference times |
 | [`build/`](build/) | how R is built: the toolchain image (upstream GCC 16), the per-version settings ([`settings.toml`](build/settings.toml)) and the build script |
-| [`node/`](node/) | running on the benchmark machines: `speedr-node` (build, timing pass, results to the controller) and `speedr-submit` (queue it as a Slurm job) |
+| [`node/`](node/) | running on the cluster: `speedr-node` (build; sentinel and timing pass, results to the controller), `speedr-submit` (queue it as a Slurm job) and, on the controller, `speedr-publish` (ingest and push to speedR-results) |
 | [`configs.toml`](configs.toml) | build configurations: default, no-bytecode, LTO, GC variants, PGO, ... |
 | [`methodology/`](methodology/) | methodology versions: every run records the one it was measured under ([rules](methodology/README.md)) |
-| [`docs/`](docs/) | [benchmarking guidelines](docs/guidelines.md) (draft), [machines](docs/machines.md) |
+| [`docs/`](docs/) | [benchmarking guidelines](docs/guidelines.md) (draft) |
 | [`tests/`](tests/) | Python tests, including the workflow security rules |
 
 Related repositories:
@@ -39,23 +39,24 @@ Related repositories:
   r-benchmarks is built on. speedR does not pin it separately: it uses the
   commit r-benchmarks' `uv.lock` locks.
 - [PRL-PRG/speedR-results](https://github.com/PRL-PRG/speedR-results): the
-  results, under CC0.
+  results, under CC0 (branch `results`); every push there renders the
+  dashboard.
 
 ## How it works
 
 ```
- new R release / R-devel revision
-        │
+ speedr-submit (controller) ──► Slurm ──wake──► benchmark box (Slurm prolog: booted? probe)
+                                                 │ build R (pinned image, cached)
+                                                 │ sentinel (R 4.5.2, against the machine)
+                                                 │ timing pass (r-benchmarks)
+       controller spool ◄──── rsync ─────────────┘
+        │ speedr-publish (cron): ingest, commit, push
         ▼
- GitHub Actions (the queue) ──► scheduler (always on) ──wake──► benchmark machine
-                                                                │ build R (pinned image)
-                                                                │ timing pass (r-benchmarks)
-                                                                │ profile pass (perf)
-                                ◄──────── results artifact ─────┘
-        scheduler validates and commits to speedR-results ──► dashboard re-render
+ speedR-results `results` ──► GitHub Actions renders the dashboard (Pages)
 ```
 
-Speedups are only computed between runs **on the same machine**. The baseline
+Speedups are only computed between runs **on the same machine** (a set of
+identical boxes, checked against each other by the probe and the sentinel). The baseline
 (1×) is the R version shipped in the newest Ubuntu LTS. The details are in
 [the guidelines](docs/guidelines.md) and on the dashboard's Methodology page.
 
@@ -92,9 +93,13 @@ From the controller:
 
 ```sh
 speedr-submit build 4.5.2 devel   # one build job each (devel: today's R-devel snapshot)
-speedr-submit run 4.5.2           # build if needed, then the timing pass
+speedr-submit run 4.5.2           # build if needed, then the sentinel and the timing pass
 uv run speedr build-env 3.6.1     # the compilers and settings an R version is built with
 ```
+
+The controller has the same checkout as `~speedr/speedr`, a checkout of
+speedR-results' `results` branch as `~speedr/speedR-results` (a deploy key may
+push to it) and runs `node/speedr-publish` from speedr's crontab.
 
 Dashboard ([Quarto](https://quarto.org) ≥ 1.11 and R ≥ 4.3):
 
@@ -103,7 +108,7 @@ cd site
 Rscript -e 'pak::local_install_deps()'   # or install the packages in site/DESCRIPTION
 quarto preview                            # live preview
 quarto render                             # static site in site/_site/
-SPEEDR_RESULTS=../../speedR-results/index quarto render   # real data
+SPEEDR_RESULTS_ROOT=../../speedR-results ./render.sh       # real data, one site per methodology
 ```
 
 ## Roadmap
@@ -111,9 +116,9 @@ SPEEDR_RESULTS=../../speedR-results/index quarto render   # real data
 | phase | what | status |
 |---|---|---|
 | 1 | repositories, licences, contributor guide, CI | in progress |
-| 2 | build layer: pinned images, GNU R builds 3.0.0 to R-devel | |
-| 3 | timing pass, results repository, scheduler, power management | |
-| 4 | dashboard on real data | mockup done |
+| 2 | build layer: pinned images, GNU R builds 3.0.0 to R-devel | done |
+| 3 | timing pass, results repository, scheduler, power management | done (methodology 0.2, draft) |
+| 4 | dashboard on real data | first releases |
 | 5 | profiles: perf pass, categorisation, quality gates | |
 | 6 | nightly R-devel and change detection | |
 | 7 | backfill of 3.x releases | |

@@ -29,15 +29,17 @@ div(class = "rs-grid3", cards)
 
 ```{r}
 m <- REF_MACHINE
-s <- D$runs[D$runs$machine == m & D$runs$kind == "devel", ]
-s <- s[order(s$date), ]
-p <- plot_ly(s, x = ~date, height = 300) |>
+s <- D$runs[D$runs$machine == m & !is.na(D$runs$sentinel_drift), ]
+s$when <- as.POSIXct(s$started, format = "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
+s <- s[order(s$when), ]
+p <- plot_ly(s, x = ~when, height = 300) |>
   add_markers(y = ~sentinel_drift, showlegend = FALSE,
               marker = list(size = ifelse(s$suspect, 11, 6), symbol = ifelse(s$suspect, "x-thin-open", "circle"),
                             color = ifelse(s$suspect, LIGHT[["ink"]], LIGHT[["series1"]]),
                             line = list(width = ifelse(s$suspect, 2, 0), color = LIGHT[["ink"]])),
-              text = sprintf("%s · sentinel %+.1f%%%s", fmt_date(s$date), 100 * s$sentinel_drift,
-                             ifelse(s$suspect, " · ⚠ suspect", "")), hoverinfo = "text")
+              text = sprintf("%s · R %s on %s · sentinel %+.1f%%%s", fmt_date(s$when), s$version,
+                             s$node, 100 * s$sentinel_drift, ifelse(s$suspect, " · ⚠ suspect", "")),
+              hoverinfo = "text")
 band <- list(type = "rect", xref = "paper", x0 = 0, x1 = 1, y0 = -0.03, y1 = 0.03,
              fillcolor = LIGHT[["band"]], line = list(width = 0), layer = "below")
 ev <- D$events[D$events$machine == m, ]
@@ -45,7 +47,7 @@ vl <- lapply(seq_len(nrow(ev)), function(i) list(type = "line", yref = "paper", 
              x0 = ev$date[i], x1 = ev$date[i], line = list(color = LIGHT[["muted"]], width = 1)))
 div(class = "rs-card",
   div(class = "rs-card-title", paste("Sentinel drift,", m)),
-  div(class = "rs-card-sub", "Relative to the rolling median of previous sessions. Band: ±3% tolerance; vertical lines: machine changes."),
+  div(class = "rs-card-sub", "Each run's sentinel relative to the machine's reference. Band: ±3% tolerance; vertical lines: machine changes."),
   rs_layout(p, x = ax(NULL, type = "date"), y = ax("Drift", tickformat = "+.0%", range = c(-0.08, 0.08)),
             legend = FALSE, shapes = c(list(band), vl))
 )
@@ -60,7 +62,7 @@ rs_table(data.frame(Date = fmt_date(ev$date), Machine = ev$machine, Change = ev$
 ```
 
 ::: {.rs-notes}
-- Machines are dedicated bare metal. They sleep when idle and are woken when work is queued.
-- Each session runs `bench doctor` and `bench denoise`, then a fixed **sentinel** benchmark. A sentinel more than 3% off the recent median marks the session *suspect*: published, but excluded from change detection.
+- A machine is a set of identical boxes: dedicated bare metal that sleeps when idle and is woken when work is queued.
+- Before every run, the box runs a native **probe** and a few short **sentinel** benchmarks on a fixed R build, both compared with the machine's reference. More than 3% off marks the run *suspect*: published, but excluded from change detection. More than 10% off and the box does not run benchmarks at all.
 - Kernel, firmware and toolchain updates happen only in maintenance windows and are logged above, because they can move every number.
 :::

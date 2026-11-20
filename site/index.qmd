@@ -35,6 +35,12 @@ div(class = "rs-card",
 ## Recent changes in R-devel
 
 ```{r}
+#| eval: !expr "!HAS_DEVEL"
+not_yet("No R-devel nights measured under this methodology version yet.")
+```
+
+```{r}
+#| eval: !expr HAS_DEVEL
 nights <- utils::head(devel_nights(D$changes), 5)
 nights$status <- vapply(nights$kind, function(k) as.character(status(k)), "")
 rs_table(
@@ -50,6 +56,6 @@ rs_table(
 [All R-devel nights →](devel.qmd)
 
 ::: {.rs-notes}
-- `r nrow(D$benchmarks)` benchmarks, every R release since 3.0.0 and every night of R-devel, on dedicated machines.
+- `r nrow(D$benchmarks)` benchmarks, `r length(unique(D$runs$version[D$runs$kind == "release"]))` R releases`r if (HAS_DEVEL) " and every night of R-devel" else ""`, on dedicated machines.
 - 1× is **R `r base_v`**, the R in `r lts_name(base_v)` LTS, on the same machine. The geometric mean uses only benchmarks every release can run. [Methodology](methodology.qmd)
 :::
