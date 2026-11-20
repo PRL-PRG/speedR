@@ -87,8 +87,8 @@ repetition and process management belong to the shared harness, driven by the
   box does not run benchmarks at all: it is taken out of service, and the job
   waits, held, until it is fixed.
 - **A box runs a job only once fully booted:** systemd reports the boot
-  complete, no start-up jobs are pending and it has been up for a minute (it is idle from about 30 s of uptime).
-  Periodic maintenance (package updates, indexing, trims) is disabled on the
+  complete, no start-up jobs are pending and it has been up for a minute (it
+  is idle from about 30 s of uptime). Periodic maintenance (package updates, indexing, trims) is disabled on the
   boxes.
 
 ## Statistics
