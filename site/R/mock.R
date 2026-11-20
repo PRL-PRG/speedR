@@ -224,7 +224,10 @@ generate_mock <- function(outdir = "data/mock", registry_path = "data/benchmarks
       run = run_id, methodology = "0.1", machine = machine, impl = "gnur", version = version,
       kind = kind, config = config, date = date, svn_rev = svn_rev,
       suspect = suspect, sentinel_drift = round(if (suspect) 0.052 else rnorm(1, 0, 0.006), 4),
-      n_ok = sum(ok), n_total = nrow(b), stringsAsFactors = FALSE)
+      n_ok = sum(ok), n_total = nrow(b), node = paste0(machine, "-box1"),
+      started = paste0(if (kind == "devel") date else "2026-11-20", "T02:00:00Z"),
+      sentinel_status = if (suspect) "suspect" else "ok", probe_status = "ok",
+      thermal_suspect = 0L, stringsAsFactors = FALSE)
     res[[run_id]] <<- do.call(rbind, rows)
     prof[[run_id]] <<- do.call(rbind, prow)
   }
