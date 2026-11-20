@@ -13,7 +13,7 @@ track_devel = true
 wake = "wol"
 
 # Reference times (ms) of the sentinel benchmarks under R 4.5.2: medians of 7
-# runs on prl-prg-bench3-ubuntu, 2026-11-20, before and after a power cycle
+# runs on prl-prg-bench4-ubuntu, 2026-11-20, before and after a power cycle
 # (spread under 1%). Empty: not calibrated, every run passes.
 [sentinel]
 "areWeFast/bounce" = 979.2
