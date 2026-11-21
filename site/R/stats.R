@@ -25,7 +25,7 @@ estimate_runs <- function(samples) {
   rss <- tapply(ok$max_rss_mb, key, stats::median)
   parts <- do.call(rbind, strsplit(names(m), "\r", fixed = TRUE))
   data.frame(
-    run = as.integer(parts[, 1]), benchmark = parts[, 2],
+    run = type.convert(parts[, 1], as.is = TRUE), benchmark = parts[, 2],
     log_mean = unname(m), log_se = unname(s / sqrt(n)), n = unname(n),
     est_ms = unname(exp(m)), gc_ms = unname(gc), max_rss_mb = unname(rss),
     stringsAsFactors = FALSE

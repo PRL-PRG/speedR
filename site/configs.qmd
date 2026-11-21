@@ -6,6 +6,22 @@ subtitle: "How build and runtime options change R's speed"
 ```{r}
 #| include: false
 source("R/site.R")
+```
+
+```{r}
+#| eval: !expr "!HAS_CONFIGS"
+not_yet("Only the default configuration has been measured under this methodology version so far.")
+```
+
+```{r}
+#| include: false
+#| eval: !expr "!HAS_CONFIGS"
+knitr::knit_exit()
+```
+
+```{r}
+#| include: false
+source("R/site.R")
 m <- REF_MACHINE
 r <- D$runs[D$runs$machine == m & D$runs$kind == "release", ]
 cfg_versions <- sort(unique(r$version[r$config != "default"]))

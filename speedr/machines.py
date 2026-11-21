@@ -1,8 +1,10 @@
 """The machine registry: one TOML file per benchmark machine in machines/.
 
-A machine is a concrete box, not a platform: speedups are only ever computed
-between runs on the same machine. Secrets (MAC addresses, BMC credentials)
-never go in these files; they name the Actions secret that holds them.
+A machine is a set of identical boxes, one Slurm partition of the cluster
+(`name` is the partition): the same hardware, firmware settings and system, so
+their results are one series. Speedups are only ever computed between runs on
+the same machine. `[sentinel]` holds the reference times the sentinel checks
+every run's box against (speedr/sentinel.py).
 """
 
 import re
@@ -16,14 +18,13 @@ MACHINES_DIR = REPO_ROOT / "machines"
 
 OS = {"linux", "macos", "windows"}
 ARCH = {"x86_64", "aarch64"}
-# How the scheduler gets the machine running before a job (see docs/machines.md).
-WAKE = {"wol", "ipmi", "relay", "always-on", "manual"}
+# how a sleeping box gets running before a job
+WAKE = {"wol", "ipmi", "always-on", "manual"}
 RUNTIME = {"docker", "native"}
 PROFILER = {"perf", "samply", "xctrace", "etw", "none"}
 PROFILES = {"validated", "experimental", "none"}
 
 NAME = re.compile(r"^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$")
-SECRET = re.compile(r"^[A-Z][A-Z0-9_]*$")
 
 
 class MachineError(ValueError):
@@ -43,16 +44,9 @@ class Machine:
     cores: str = ""                 # cpuset the benchmarks are pinned to, e.g. "2-7"
     numa_node: int | None = None
     track_devel: bool = False       # benchmark every R-devel night
-    wake_secret: str = ""           # Actions secret: MAC (wol/relay) or BMC host (ipmi)
-    relay_host: str = ""
+    sentinel: dict = field(default_factory=dict)   # benchmark -> reference ms
     notes: str = ""
     extra: dict = field(default_factory=dict)
-
-    @property
-    def runner_labels(self) -> list[str]:
-        """Labels the self-hosted runner on this machine registers with."""
-        return ["self-hosted", "speedr", f"m-{self.name}", f"os-{self.os}",
-                f"arch-{self.arch}"]
 
     def validate(self) -> None:
         def need(ok: bool, msg: str) -> None:
@@ -68,11 +62,8 @@ class Machine:
         need(self.profiles in PROFILES, f"profiles must be one of {sorted(PROFILES)}")
         # Docker on macOS and Windows runs a Linux VM, which measures Linux.
         need(self.runtime != "docker" or self.os == "linux", "docker runtime is Linux-only")
-        if self.wake in {"wol", "ipmi", "relay"}:
-            need(bool(SECRET.match(self.wake_secret)),
-                 f"wake = {self.wake!r} needs wake_secret naming an Actions secret")
-        if self.wake == "relay":
-            need(bool(self.relay_host), "wake = 'relay' needs relay_host")
+        need(all(isinstance(v, (int, float)) and v > 0 for v in self.sentinel.values()),
+             "sentinel times must be positive numbers (ms)")
         need(not self.extra, f"unknown keys: {sorted(self.extra)}")
 
 
@@ -89,3 +80,7 @@ def load(path: Path) -> Machine:
 
 def load_all(directory: Path = MACHINES_DIR) -> list[Machine]:
     return [load(p) for p in sorted(directory.glob("*.toml"))]
+
+
+def load_all_by_name(directory: Path = MACHINES_DIR) -> dict[str, Machine]:
+    return {m.name: m for m in load_all(directory)}

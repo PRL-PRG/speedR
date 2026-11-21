@@ -27,7 +27,7 @@ tiles(
        paste(fmt_ms(base_row$est_ms), "→", fmt_ms(last_row$est_ms))),
   tile(paste("Time on R", last_row$version), fmt_ms(last_row$est_ms),
        sprintf("%d processes · ±%.1f%%", last_row$n, 100 * Z * last_row$log_se)),
-  tile("Most time in", top$category, sprintf("%.0f%% of samples (R %s)", 100 * top$share, last_row$version)),
+  if (nrow(top)) tile("Most time in", top$category, sprintf("%.0f%% of samples (R %s)", 100 * top$share, last_row$version)),
   tile("Runs on", paste0("R ≥ ", b$min_version),
        if (b$min_version != "3.0.0") "not measured on older releases" else "every release since 3.0.0")
 )
@@ -55,6 +55,7 @@ div(class = "rs-card",
 ```
 
 ```{r}
+#| eval: !expr HAS_PROFILES
 pr <- prof[prof$machine == m & prof$kind == "release", ]
 grp <- aggregate(share ~ version + date + group, data = pr, FUN = sum)
 grp <- grp[order(grp$date), ]
@@ -67,6 +68,7 @@ div(class = "rs-card",
 ```
 
 ```{r}
+#| eval: !expr HAS_PROFILES
 cat_tab <- merge(
   prof[prof$run == base_row$run, c("category", "share")],
   last_prof[, c("category", "share")], by = "category", suffixes = c("_base", "_last"))
@@ -140,7 +142,7 @@ div(class = "rs-card",
     tags$dt("Source"), tags$dd(tags$a(href = src, paste0("benchmarks/", b$suite, "/", b$name, ".R"))),
     tags$dt("Provenance & licence"), tags$dd(tags$a(href = origin, paste0(b$suite, "/ORIGIN.md"))),
     tags$dt("Minimum R"), tags$dd(b$min_version),
-    tags$dt("Run design"), tags$dd("5 processes × (1 warm-up + 4 measured iterations); profile: 5 perf recordings")
+    tags$dt("Run design"), tags$dd(tags$a(href = "../methodology.html", "see Methodology"))
   )
 )
 ```

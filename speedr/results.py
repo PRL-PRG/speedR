@@ -1,9 +1,12 @@
 """The layout of speedR-results, and a check that a checkout follows it.
 
-    runs/<machine>/<impl>/<version>/<config>/<run_id>/meta.json   one per run
-    index/*.csv                                                   what the dashboard reads
+    <methodology>/<impl>/<machine>/<version>/<config>/<run_id>/   one per run:
+        meta.json, samples.csv (per process), iterations.csv
+    <methodology>/index/*.csv                                     what the dashboard reads
 
-The index tables are derived from runs/ by the ingest step. Columns listed
+Results of different methodology versions are never compared, so each has its
+own tree; <impl> is the R implementation (gnur, later others). The index
+tables are derived from the runs by the ingest step (ingest.py). Columns listed
 here are required; extra columns are allowed so the index can grow without
 breaking older dashboards. Everything is stored uncompressed: git compresses
 objects and deltas itself, and a compressed file defeats both.
@@ -38,23 +41,25 @@ def _header(path: Path) -> list[str]:
 def check(root: Path) -> list[str]:
     """Every problem with a results checkout, as `path: message`."""
     problems = []
-    for name, columns in INDEX_TABLES.items():
-        path = root / "index" / name
-        if not path.exists():
-            problems.append(f"{path}: missing")
-            continue
-        missing = [c for c in columns if c not in _header(path)]
-        if missing:
-            problems.append(f"{path}: missing columns {missing}")
     known = {m.version for m in methodology.load_all()}
-    for path in sorted((root / "runs").glob("*/*/*/*/*/meta.json")):
-        m = json.loads(path.read_text())
-        problems += [f"{path}: {e}" for e in meta.errors(m)]
-        if m.get("methodology") not in known:
-            problems.append(f"{path}: unknown methodology version {m.get('methodology')!r}")
-        machine, impl, version, config, run = path.parent.relative_to(root / "runs").parts
-        expected = (m.get("machine"), m.get("impl"), m.get("version"), m.get("config"),
-                    m.get("run_id"))
-        if (machine, impl, version, config, run) != expected:
-            problems.append(f"{path}: directory does not match machine/impl/version/config/run_id")
+    for mdir in sorted(p for p in root.iterdir() if methodology.VERSION.match(p.name)):
+        if mdir.name not in known:
+            problems.append(f"{mdir}: unknown methodology version")
+        for name, columns in INDEX_TABLES.items():
+            path = mdir / "index" / name
+            if not path.exists():
+                problems.append(f"{path}: missing")
+                continue
+            missing = [c for c in columns if c not in _header(path)]
+            if missing:
+                problems.append(f"{path}: missing columns {missing}")
+        for path in sorted(mdir.glob("*/*/*/*/*/meta.json")):
+            m = json.loads(path.read_text())
+            problems += [f"{path}: {e}" for e in meta.errors(m)]
+            impl, machine, version, config, run = path.parent.relative_to(mdir).parts
+            expected = (m.get("impl"), m.get("machine"), m.get("version"), m.get("config"),
+                        m.get("run_id"), m.get("methodology"))
+            if (impl, machine, version, config, run, mdir.name) != expected:
+                problems.append(f"{path}: directory does not match "
+                                "methodology/impl/machine/version/config/run_id")
     return problems

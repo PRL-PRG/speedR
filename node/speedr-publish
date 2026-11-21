@@ -1,0 +1,19 @@
+#!/bin/bash
+# On the controller, as speedr (cron, every few minutes): ingest the runs the
+# nodes copied into the spool into a speedR-results checkout, commit and push
+# them. Pushing to its `results` branch renders the dashboard (GitHub Pages).
+#
+#   speedr-publish [SPOOL [RESULTS]]   default /srv/speedr/spool, ~/speedR-results
+set -euo pipefail
+repo=$(cd "$(dirname "$0")/.." && pwd)
+spool=${1:-/srv/speedr/spool}
+results=${2:-$HOME/speedR-results}
+exec 9>"$results/.git/speedr-publish.lock"
+flock -n 9 || exit 0   # the previous one is still at it
+cd "$results"
+git pull -q --ff-only
+new=$("$repo/.venv/bin/speedr" ingest "$spool" "$results")
+[ -n "$new" ] || exit 0
+git add -A
+git commit -q -m "Ingest $(echo "$new" | wc -l) run(s)" -m "$(echo "$new" | sed "s|^$results/||")"
+git push -q

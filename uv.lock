@@ -194,7 +194,7 @@ wheels = [
 [[package]]
 name = "rbench"
 version = "0.1.0"
-source = { git = "https://github.com/PRL-PRG/r-benchmarks.git?rev=65ca9a3dda1e35b6d550d97c71c086b479c8cfde#65ca9a3dda1e35b6d550d97c71c086b479c8cfde" }
+source = { git = "https://github.com/PRL-PRG/r-benchmarks.git?rev=86c5182ce98e9380734d4557283c73e1984e061e#86c5182ce98e9380734d4557283c73e1984e061e" }
 dependencies = [
     { name = "bench" },
 ]
@@ -378,7 +378,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "jsonschema", specifier = ">=4.22" },
-    { name = "rbench", git = "https://github.com/PRL-PRG/r-benchmarks.git?rev=65ca9a3dda1e35b6d550d97c71c086b479c8cfde" },
+    { name = "rbench", git = "https://github.com/PRL-PRG/r-benchmarks.git?rev=86c5182ce98e9380734d4557283c73e1984e061e" },
 ]
 
 [package.metadata.requires-dev]

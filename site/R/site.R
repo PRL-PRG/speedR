@@ -16,3 +16,9 @@ D <- site_data()
 REF_MACHINE <- D$machines$machine[1]
 METHODOLOGY <- D$methodology
 METHODOLOGY_VERSIONS <- D$methodology_versions
+
+# what the results have so far: pages and sections without data say so
+HAS_PROFILES <- nrow(D$profiles) > 0
+HAS_DEVEL <- any(D$runs$kind == "devel")
+HAS_CONFIGS <- any(D$runs$config != "default")
+not_yet <- function(text) div(class = "rs-empty", tags$strong(text))

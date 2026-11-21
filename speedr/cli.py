@@ -1,19 +1,30 @@
-"""`speedr` command line. Grows a subcommand per pipeline stage (build, run,
-profile, ingest, ...); for now it covers the registry, the metadata schema, the
-suite pin and the profile manifest."""
+"""`speedr` command line: the registry, the metadata schema, the suite pin,
+build settings, the sentinel, the profile manifest and the ingest."""
 
 import argparse
 import json
 import sys
 from pathlib import Path
 
-from . import __version__, build, configs, machines, meta, methodology, profile, results, upstream
+from . import (
+    __version__,
+    build,
+    configs,
+    ingest,
+    machines,
+    meta,
+    methodology,
+    profile,
+    results,
+    sentinel,
+    upstream,
+)
 
 
 def cmd_machines(args: argparse.Namespace) -> int:
     for m in machines.load_all():
         print(f"{m.name:24} {m.os}/{m.arch:8} wake={m.wake:9} profiler={m.profiler:7} "
-              f"labels={','.join(m.runner_labels)}")
+              f"sentinel={'calibrated' if m.sentinel else 'uncalibrated'}")
     return 0
 
 
@@ -24,6 +35,9 @@ def cmd_configs(args: argparse.Namespace) -> int:
 
 
 def cmd_methodology(args: argparse.Namespace) -> int:
+    if args.current:
+        print(methodology.current().version)
+        return 0
     for m in methodology.load_all():
         print(f"{m.version:6} {m.status:7} {m.date}  {m.summary}")
     return 0
@@ -54,6 +68,21 @@ def cmd_check_results(args: argparse.Namespace) -> int:
     return 1 if problems else 0
 
 
+def cmd_sentinel(args: argparse.Namespace) -> int:
+    if args.plan:
+        print(sentinel.plan())
+        return 0
+    r = sentinel.check(json.loads(Path(args.report).read_text()), args.machine)
+    print(json.dumps(r, indent=1))
+    return 3 if r["status"] == "failed" else 0
+
+
+def cmd_ingest(args: argparse.Namespace) -> int:
+    for run in ingest.ingest(Path(args.spool), Path(args.root)):
+        print(run)
+    return 0
+
+
 def cmd_suite(args: argparse.Namespace) -> int:
     for name, commit in upstream.commits().items():
         print(f"{name:7} {commit}")
@@ -77,8 +106,9 @@ def parser() -> argparse.ArgumentParser:
         func=cmd_machines)
     sub.add_parser("configs", help="list and validate configs.toml").set_defaults(
         func=cmd_configs)
-    sub.add_parser("methodology", help="list the methodology versions").set_defaults(
-        func=cmd_methodology)
+    mv = sub.add_parser("methodology", help="list the methodology versions")
+    mv.add_argument("--current", action="store_true", help="print only the one new runs use")
+    mv.set_defaults(func=cmd_methodology)
     b = sub.add_parser("build-env", help="the compilers and configure answers to build an R "
                        "version with (build/settings.toml)")
     b.add_argument("version",
@@ -90,6 +120,17 @@ def parser() -> argparse.ArgumentParser:
     r = sub.add_parser("check-results", help="check a speedR-results checkout's layout")
     r.add_argument("root", metavar="DIR")
     r.set_defaults(func=cmd_check_results)
+    s = sub.add_parser("sentinel", help="check a sentinel run against the machine's reference "
+                       "(exit 3: failed)")
+    s.add_argument("report", nargs="?", metavar="REPORT.json", help="the sentinel's --json report")
+    s.add_argument("machine", nargs="?", help="machines/<MACHINE>.toml")
+    s.add_argument("--plan", action="store_true",
+                   help="print the R version, benchmarks and run design as shell assignments")
+    s.set_defaults(func=cmd_sentinel)
+    i = sub.add_parser("ingest", help="add the spool's new runs to a speedR-results checkout")
+    i.add_argument("spool", metavar="SPOOL")
+    i.add_argument("root", metavar="RESULTS")
+    i.set_defaults(func=cmd_ingest)
     sub.add_parser("suite", help="show the rbench and bench commits, checked against the "
                    "environment").set_defaults(func=cmd_suite)
     pm = sub.add_parser("profile-manifest",
