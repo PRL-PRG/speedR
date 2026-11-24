@@ -49,7 +49,7 @@ def spool_run(spool: Path, label="4.5.2", run_id=RUN_ID) -> Path:
         f"run_id={run_id}\nlabel={label}\nmachine=kabylake\nnode=n1\njob=12\nconfig=default\n"
         "methodology=0.1\nstarted=2026-11-20T01:00:00Z\nfinished=2026-11-20T03:00:00Z\nexit=0\n"
         "kernel=7.0.0-43-generic\ncmdline=ro isolcpus=3\nos_release=Ubuntu 26.04 LTS\n"
-        "boot_id=b\nuptime_s=300.5\ncpuset=3\n"
+        "boot_id=b\nuptime_s=300.5\ncpuset=3\nlayouts=0 1000\n"
         f"source_sha256={'a' * 64}\nspeedr={SHA}\nrbench={SHA}\nbench={SHA}\n")
     return d
 
@@ -60,6 +60,19 @@ def test_processes_take_the_median_of_measured_iterations():
     assert rows[1]["suspect"] and rows[1]["cpu_temp_max"] == 95.0
     assert rows[2]["time_ms"] is None and rows[2]["failure"] == "object 'x' not found"
     assert ingest.run_design(REPORT) == {"runs": 2, "iterations": 4, "warmups": 1}
+
+
+def test_passes_become_processes():
+    one = {"fingerprint": {"cpu_model": "x"}, "diagnostics": ["a"], "executions": [
+        execution("areWeFast", "bounce", 1, [900, 850, 860, 870])]}
+    two = {"fingerprint": {"cpu_model": "y"}, "diagnostics": [], "executions": [
+        execution("areWeFast", "bounce", 1, [905, 852, 858, 866])]}
+    merged = ingest.merge_passes([one, two])
+    assert [e["run"] for e in merged["executions"]] == [1, 2]
+    assert merged["fingerprint"] == {"cpu_model": "x"} and merged["diagnostics"] == ["a"]
+    assert [r["time_ms"] for r in ingest.processes(merged)] == [860, 858]
+    assert ingest.run_design(merged)["runs"] == 2
+    assert one["executions"][0]["run"] == 1 and two["executions"][0]["run"] == 1   # untouched
 
 
 def test_ingest_writes_runs_and_index(tmp_path):
@@ -75,6 +88,7 @@ def test_ingest_writes_runs_and_index(tmp_path):
     m = json.loads((run / "meta.json").read_text())
     assert m["host"]["probe"]["status"] == "ok" and m["sentinel"]["status"] == "ok"
     assert m["build"]["flags"]["CC"] == "gcc -fpermissive -std=gnu17"
+    assert m["run_design"]["layouts"] == [0, 1000]
     runs = ingest.read_csv(root / "0.1" / "index" / "runs.csv")
     assert runs[0]["run"] == RUN_ID and runs[0]["suspect"] == "TRUE"   # one hot process
     assert (runs[0]["n_ok"], runs[0]["n_total"]) == ("1", "2")

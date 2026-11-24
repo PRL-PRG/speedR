@@ -11,6 +11,7 @@ speedR needs differently:
   `setarch -R` on Linux, so address-space randomisation is off for R alone;
 - the run design (guidelines §3) and perf settings (§6) as defaults;
 - the configuration's run-time environment from speedR's configs.toml;
+- the benchmarks speedR leaves out (PRUNED);
 - the timing pass also records CPU temperature and throttling (bench's Thermal).
 """
 
@@ -20,6 +21,18 @@ import tomllib
 from pathlib import Path
 
 CONFIGS_FILE = Path(__file__).resolve().parent.parent / "configs.toml"
+
+# Benchmarks left out of the suite (methodology 0.5): noise beyond what a run
+# can resolve, and nothing the rest of the suite does not exercise.
+# mathkernel/MMM-T1: its time depends on where R's code is linked (one layout
+# in eleven +20%), and its kernel, a scalar triple loop over 200x200 matrices,
+# is also SpeedTest/prg/matmult/matmult_triplp's.
+PRUNED = {"mathkernel/MMM-T1"}
+
+
+def kept(b) -> bool:
+    """bench filter: False for a benchmark in PRUNED."""
+    return f"{b.suite}/{b.name}" not in PRUNED
 
 
 def config_env(name: str) -> dict[str, str]:

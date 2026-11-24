@@ -9,7 +9,8 @@
 #   speedr-node build SOURCE                  build R (cached by build id) in $work/r/<id>
 #   speedr-node sentinel                      the sentinel alone: does this box measure
 #                                             as its machine should?
-#   speedr-node run SOURCE [timing.py args]   sentinel, then the timing pass ->
+#   speedr-node run SOURCE [timing.py args]   sentinel, then the timing pass, one pass of
+#                                             the suite per code layout ->
 #                                             $work/results/LABEL/RUN_ID/, copied to
 #                                             the controller's spool
 #
@@ -24,6 +25,11 @@ repo=$(cd "$(dirname "$0")/.." && pwd)
 work=${SPEEDR_WORK:-$HOME/speedr-work}
 image=speedr-toolchain
 bench_cpus=3 housekeeping_cpus=0-2
+# the code layouts every build is installed at (build/build-r.sh): bytes of
+# filler in front of R's code, spread over a 4 KiB page (the period of the
+# instruction cache's sets); the timing pass runs one process per benchmark on
+# each (methodology 0.5)
+layouts="0 1000 2100 3300"
 prerelease=https://cloud.r-project.org/src/base-prerelease
 cran=https://cloud.r-project.org/src/contrib
 # the one package beyond R's recommended ones that the suite needs (lr, lr_test,
@@ -100,11 +106,12 @@ build_id() {  # LABEL -> id, from speedr.ids (tarball, settings, package, toolch
     flags_env "$1" | "$repo/.venv/bin/python" -c '
 import sys
 from speedr.ids import build_id
-sha, toolchain, package = sys.argv[1:]
+sha, toolchain, package, layouts = sys.argv[1:]
 flags = dict(line.rstrip("\n").split("=", 1) for line in sys.stdin)
 flags["configure"] = "R defaults (./configure --prefix only)"
 flags["packages"] = package
-print(build_id("gnur", sha, "default", flags, toolchain))' "$sha" "$toolchain" "$(extra_pkg_file "$1")"
+flags["layouts"] = layouts
+print(build_id("gnur", sha, "default", flags, toolchain))' "$sha" "$toolchain" "$(extra_pkg_file "$1")" "$layouts"
 }
 
 in_image() {  # LABEL ARGS... -> build/build-r.sh ARGS in the image, with this version's settings
@@ -112,7 +119,7 @@ in_image() {  # LABEL ARGS... -> build/build-r.sh ARGS in the image, with this v
     flags_env "$l" > "$work/flags-$l.env"
     docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp --cpuset-cpus "$housekeeping_cpus" \
         --network none --tmpfs /build:exec,mode=1777,size=8g --env-file "$work/flags-$l.env" \
-        -v "$repo:$repo:ro" -v "$work:$work" "$image" \
+        -e SPEEDR_LAYOUTS="$layouts" -v "$repo:$repo:ro" -v "$work:$work" "$image" \
         "$repo/build/build-r.sh" "$work/src/R-$l.tar.gz" "$@"
 }
 
@@ -121,7 +128,7 @@ in_image() {  # LABEL ARGS... -> build/build-r.sh ARGS in the image, with this v
 name=""
 trap '[ -n "$name" ] && docker kill "$name" >/dev/null 2>&1; exit 143' TERM INT
 
-bench() {  # NAME R-BUILD-ID TIMING-ARGS... -> drivers/timing.py in the image, on the bench CPU
+bench() {  # NAME R TIMING-ARGS... -> drivers/timing.py in the image, on the bench CPU
     name=speedr-$1-$(date +%s)-$$; local r=$2; shift 2
     # setup() caches inputs in the benchmarks' data/ folders, some per R
     # version (Matrix objects): start every pass without them
@@ -131,7 +138,7 @@ bench() {  # NAME R-BUILD-ID TIMING-ARGS... -> drivers/timing.py in the image, o
     docker run --rm --name "$name" --user "$(id -u):$(id -g)" -e HOME=/tmp --network none \
         --cpuset-cpus "$bench_cpus" --cpuset-mems 0 --security-opt seccomp=unconfined \
         -v "$repo:$repo" -v "$work:$work" -w "$repo" "$image" \
-        .venv/bin/python drivers/timing.py --R "$work/r/$r/bin/R" --no-progress "$@" &
+        .venv/bin/python drivers/timing.py --R "$r" --no-progress "$@" &
     local rc=0; wait $! || rc=$?   # in the background, so the trap runs as soon as the signal arrives
     return $rc
 }
@@ -147,7 +154,7 @@ sentinel() {  # MACHINE DIR -> DIR/sentinel.json; exit status 3: failed
     eval "$("$repo/.venv/bin/speedr" sentinel --plan)"
     id=$(build_id "$(resolve "$version")")
     [ -x "$work/r/$id/bin/R" ] || "$0" build "$version" >&2
-    bench sentinel "$id" --include "$include" --runs "$runs" --iterations "$iterations" \
+    bench sentinel "$work/r/$id/bin/R" --include "$include" --runs "$runs" --iterations "$iterations" \
         --warmups "$warmups" --json "$2/sentinel-timing.json" --dir "$2/sentinel-exec" >/dev/null || true
     "$repo/.venv/bin/speedr" sentinel "$2/sentinel-timing.json" "$1" > "$2/sentinel.json" || rc=$?
     echo "sentinel on $(hostname -s): $(tr -d '\n ' < "$2/sentinel.json" | grep -o '"deviation":[^,]*,"status":"[a-z]*"')"
@@ -215,10 +222,19 @@ run)
     fi
     [ "$rc" = 0 ] || exit "$rc"
 
-    rc=0; bench run "$id" --json "$out/timing.json" --csv "$out/timing.csv" --dir "$out/exec" "$@" || rc=$?
+    # one pass of the suite per layout, one process per benchmark in each; the
+    # passes' reports become one (timing.json), the k-th pass its process k
+    rc=0; k=0
+    for pad in $layouts; do
+        k=$((k + 1)); r=$work/r/$id/bin/R
+        [ "$pad" = 0 ] || r=$work/r/$id/layout/$pad/bin/R
+        bench "run$k" "$r" --runs 1 --json "$out/timing-$k.json" --csv "$out/timing-$k.csv" \
+            --dir "$out/exec-$k" "$@" || rc=$?
+    done
+    "$repo/.venv/bin/speedr" merge-passes "$out"/timing-[0-9]*.json > "$out/timing.json" || rc=1
     {
         echo "run_id=$run_id"; echo "label=$l"; echo "machine=$machine"; echo "node=$(hostname -s)"
-        echo "job=${SLURM_JOB_ID:-}"; echo "config=default"
+        echo "job=${SLURM_JOB_ID:-}"; echo "config=default"; echo "layouts=$layouts"
         echo "methodology=$("$repo/.venv/bin/speedr" methodology --current)"
         echo "started=$started"; echo "finished=$(date -u +%Y-%m-%dT%H:%M:%SZ)"; echo "exit=$rc"
         echo "kernel=$(uname -r)"; echo "cmdline=$(cat /proc/cmdline)"

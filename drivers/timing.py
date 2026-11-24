@@ -8,7 +8,9 @@ import rbench as rb
 from bench import Context, Params, Thermal
 
 # r-benchmarks' own defaults are 3 runs x 5 iterations, 2 of them warm-up.
-RUN_DESIGN = {"runs": 3, "iterations": 5, "warmups": 1}   # methodology 0.2
+# On the nodes each of the 4 processes runs R linked at another code layout:
+# speedr-node makes one pass of the suite per layout, with --runs 1.
+RUN_DESIGN = {"runs": 4, "iterations": 5, "warmups": 1}   # methodology 0.5
 
 
 class TimingParams(rb.RbenchHarnessParams):
@@ -38,6 +40,7 @@ THERMAL = Thermal()
 APP = (
     rb.DEFAULT_APP.with_params(TimingParams)
     .with_command(command, override=True)
+    .with_filter(common.kept)
     .with_env(lambda ctx: common.config_env(ctx.params.config))
     .with_hook(THERMAL)
     .with_metric(THERMAL)

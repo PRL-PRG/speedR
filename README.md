@@ -117,7 +117,7 @@ SPEEDR_RESULTS_ROOT=../../speedR-results ./render.sh       # real data, one site
 |---|---|---|
 | 1 | repositories, licences, contributor guide, CI | in progress |
 | 2 | build layer: pinned images, GNU R builds 3.0.0 to R-devel | done |
-| 3 | timing pass, results repository, scheduler, power management | done (methodology 0.2, draft) |
+| 3 | timing pass, results repository, scheduler, power management | done (methodology 0.5, draft) |
 | 4 | dashboard on real data | first releases |
 | 5 | profiles: perf pass, categorisation, quality gates | |
 | 6 | nightly R-devel and change detection | |

@@ -182,6 +182,14 @@
         },
         "aslr": {
           "type": "boolean"
+        },
+        "layouts": {
+          "description": "bytes of filler in front of R's code, one layout per process (process k ran layout k)",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
         }
       }
     },

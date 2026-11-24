@@ -4,7 +4,7 @@ speedR-results (layout: results.py).
     <spool>/<label>/<run_id>/
         run.env            the run: machine, node, methodology, host, suite, times
         speedr-build.env   the build: id, source, settings, toolchain
-        timing.json        bench's report of the timing pass
+        timing.json        bench's report of the timing pass (its passes merged)
         sentinel.json      the sentinel before it (speedr sentinel)
         probe.json         the node's probe before the job (prlprg-bench prolog)
 
@@ -87,6 +87,17 @@ def iterations(report: dict) -> list[dict]:
     return rows
 
 
+def merge_passes(reports: list[dict]) -> dict:
+    """One report of a run timed in passes, one per code layout and each with
+    one process per benchmark (speedr-node run): the k-th pass's executions
+    become process k."""
+    out = {**reports[0], "executions": [], "diagnostics": []}
+    for k, r in enumerate(reports, 1):
+        out["executions"] += [e | {"run": k} for e in r["executions"]]
+        out["diagnostics"] += r.get("diagnostics", [])
+    return out
+
+
 def run_design(report: dict) -> dict:
     ex = report["executions"]
     full = max(ex, key=lambda e: len(e["iterations"]), default={"iterations": []})
@@ -123,7 +134,8 @@ def build_meta(spool_run: Path) -> dict:
         "suite": {"repo": SUITE_REPO, "commit": run["rbench"], "bench_commit": run["bench"],
                   "speedr_commit": run["speedr"], "benchmarks": len({_benchmark(e) for e in
                                                                     report["executions"]})},
-        "run_design": run_design(report) | {"cpuset": run["cpuset"], "aslr": False},
+        "run_design": run_design(report) | {"cpuset": run["cpuset"], "aslr": False} |
+                      ({"layouts": [int(p) for p in run["layouts"].split()]} if "layouts" in run else {}),
         "host": {"node": run["node"], "kernel": run["kernel"], "cmdline": run["cmdline"],
                  "os_release": run["os_release"], "boot_id": run["boot_id"],
                  "uptime_s": float(run["uptime_s"]), "slurm_job": run.get("job", ""),

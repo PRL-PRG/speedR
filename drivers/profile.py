@@ -42,6 +42,7 @@ APP = (
     bench_app(params=ProfileParams)
     .add(rp.rb.ALL_SUITES.with_env(lambda ctx: {"R_LIBS": str(ctx.params.get_library_path)}))
     .with_command(command)
+    .with_filter(common.kept)
     .with_env(lambda ctx: common.config_env(ctx.params.config))
     .with_hook(lambda ctx: ctx.params.get_install_packages_hook)
     .with_runs(lambda ctx: FixedRuns(ctx.params.recordings))

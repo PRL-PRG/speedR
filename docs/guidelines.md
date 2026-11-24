@@ -8,7 +8,10 @@ project and will be refined as the pipeline is built; sections marked
 ## 1. What is measured
 
 - **The suite.** The 118 programs of
-  [r-benchmarks](https://github.com/PRL-PRG/r-benchmarks), in 8 suites. Each
+  [r-benchmarks](https://github.com/PRL-PRG/r-benchmarks), in 8 suites, but
+  those too noisy to resolve a change the dashboard flags and covered by the
+  rest (`PRUNED` in `drivers/common.py`; under methodology 0.5,
+  `mathkernel/MMM-T1`). Each
   benchmark defines `execute(size)` (timed) and optionally `setup()` and
   `doctor()` (untimed). A benchmark whose `doctor()` fails on a release is
   recorded as unsupported for that release, not dropped silently.
@@ -33,10 +36,16 @@ project and will be refined as the pipeline is built; sections marked
 
 ## 3. Running benchmarks
 
-- **Run design.** Separate R processes per benchmark (3 under methodology 0.2),
+- **Run design.** Separate R processes per benchmark (4 under methodology 0.5),
   each running 1 warm-up and 4 measured iterations (r-benchmarks' own default is 3 processes of 2 + 3;
   speedR's drivers set theirs). The process is the unit of replication: the spread
   between processes is larger than the spread within one.
+- **Code layouts.** Each process of a run uses the build linked at another
+  code layout (filler in front of R's code), because where R's code lies moves
+  some benchmarks by up to 20%. A run is one pass over the suite per layout.
+- **A pause before every iteration.** The harness idles 1 ms after its forced
+  garbage collection, so no iteration inherits the branch-predictor state of
+  the one before.
 - **Order.** Benchmarks run in a shuffled order with a fixed seed.
 - **Isolation.** r-benchmarks' sealed environment (no inherited shell
   environment, no user or site library, fixed locale, BLAS/OpenMP pinned to one
@@ -66,9 +75,8 @@ project and will be refined as the pipeline is built; sections marked
 ## 5. Statistics
 
 - A benchmark's time on a run is the **geometric mean over processes** of the
-  per-process median iteration time, with a 95% interval from a hierarchical
-  bootstrap (processes, then iterations). *(The mockup uses a log-scale
-  t-interval; to do.)*
+  per-process median iteration time, with a 95% t-interval on the log scale
+  (process as the unit) whose standard error has a 0.1% floor.
 - A **speedup** is *time(A) / time(B)*, only between runs on the **same
   machine**.
 - Suite-level numbers are **geometric means** over the benchmarks every compared
