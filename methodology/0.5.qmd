@@ -86,13 +86,14 @@ VMIL 2025): an R package on a patched GNU R 4.5.2, both in
   then the rcp package is installed into it.
 - It runs the **same harness, run design and statistics** as GNU R, on the same
   machines. What switches it on goes in a file the harness sources before the
-  benchmark. For rcp, `execute()` is compiled with `rcp_cmpfun()` (optimisation
-  level 3) after `setup()` and before the first iteration, as rcp's own
-  benchmarks do; what `execute()` calls runs as R runs it. Compiling is outside
-  the measured iterations, as GNU R's byte-compiling of `execute()` is, which
-  happens in the warm-up.
-- A benchmark it cannot run, or cannot compile, is recorded as failing for that
-  commit, never measured as plain R.
+  benchmark. For rcp, after `setup()` and before the first iteration, every
+  function the benchmark defined is compiled with `rcp_cmpfun()` (optimisation
+  level 3, as rcp's own benchmarks compile `execute()`; closures created inside
+  a compiled function are compiled with it). Package code runs as installed, and
+  rcp's JIT is not used. Compiling is outside the measured iterations, as GNU
+  R's byte-compiling is, which happens in the warm-up.
+- A benchmark it cannot run, or of which it cannot compile a function, is
+  recorded as failing for that commit, never measured as plain R.
 - Speedups compare a commit with the **GNU R release it is built on**, measured
   on the same machine under the same methodology: over the benchmarks both ran.
 - **Profiles** are recorded for GNU R only: perf does not see a JIT's generated

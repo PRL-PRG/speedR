@@ -122,7 +122,7 @@ rs_table(known, columns = list(Status = colDef(html = TRUE)), pagination = FALSE
 
 ::: {.rs-notes}
 - An implementation other than GNU R is built from a commit of its repository with the compiler and settings of the GNU R release it is built on, and measured by the same harness, run design and code layouts as GNU R, on the same machines, under the same methodology. Its commits are compared with that release, never across machines.
-- **rcp:** after a benchmark's `setup()`, before its first iteration, `execute()` is compiled with `rcp_cmpfun()` (optimisation level 3), as rcp's own benchmarks do; what `execute()` calls runs as R runs it. The compilation is outside the measured iterations, as GNU R's byte-compilation of `execute()` is (it happens in the warm-up).
+- **rcp:** after a benchmark's `setup()`, before its first iteration, every function the benchmark defined is compiled with `rcp_cmpfun()` (optimisation level 3); closures created inside them are compiled with them, package code runs as installed, and rcp's JIT is not used. The compilation is outside the measured iterations, as GNU R's byte-compilation is (it happens in the warm-up).
 - Profiles are recorded for GNU R only: perf does not see a JIT's generated code without its help, and the category rules know GNU R's interpreter.
 - How to add one: `impls/` in the speedR repository.
 :::
