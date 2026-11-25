@@ -134,14 +134,15 @@ def build_meta(spool_run: Path) -> dict:
         "suite": {"repo": SUITE_REPO, "commit": run["rbench"], "bench_commit": run["bench"],
                   "speedr_commit": run["speedr"], "benchmarks": len({_benchmark(e) for e in
                                                                     report["executions"]})},
-        "run_design": run_design(report) | {"cpuset": run["cpuset"], "aslr": False} |
-                      ({"layouts": [int(p) for p in run["layouts"].split()]} if "layouts" in run else {}),
+        "run_design": run_design(report) | {"cpuset": run["cpuset"], "aslr": False},
         "host": {"node": run["node"], "kernel": run["kernel"], "cmdline": run["cmdline"],
                  "os_release": run["os_release"], "boot_id": run["boot_id"],
                  "uptime_s": float(run["uptime_s"]), "slurm_job": run.get("job", ""),
                  "fingerprint": report.get("fingerprint", {})},
         "started": run["started"], "finished": run["finished"], "passes": ["timing"],
     }
+    if "layouts" in run:
+        m["run_design"]["layouts"] = [int(p) for p in run["layouts"].split()]
     if (probe := _json(spool_run / "probe.json")) is not None:
         m["host"]["probe"] = probe
     if (sentinel := _json(spool_run / "sentinel.json")) is not None:
