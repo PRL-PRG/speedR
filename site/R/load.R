@@ -56,12 +56,15 @@ build_cache <- function() {
   events$date <- as.Date(events$date)
   samples <- utils::read.csv(file.path(dir, "samples.csv"), stringsAsFactors = FALSE)
   samples <- samples[samples$run %in% runs$run, ]
-  profiles <- utils::read.csv(file.path(dir, "profiles.csv"), stringsAsFactors = FALSE,
-                              colClasses = c(run = "character", version = "character"))
   # A profile run records a build the timing runs measured (same machine,
   # version, configuration and source date): the pages show it as theirs, the
-  # newest one if the build was profiled more than once.
+  # newest one if the build was profiled more than once. (Indexes from before
+  # the profile pass have only the first four columns, and no rows.)
   build <- c("machine", "version", "config", "date")
+  profiles <- utils::read.csv(file.path(dir, "profiles.csv"), stringsAsFactors = FALSE,
+                              colClasses = "character")
+  profiles[setdiff(c(build, "started"), names(profiles))] <- list(character())
+  profiles$share <- as.numeric(profiles$share)
   profiles$date <- as.Date(profiles$date)
   pk <- do.call(paste, profiles[build])
   profiles <- profiles[profiles$started == ave(profiles$started, pk, FUN = max), ]
