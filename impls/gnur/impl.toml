@@ -1,0 +1,7 @@
+# GNU R, the reference: its releases and R-devel, from CRAN, built with
+# build/build-r.sh and the settings of build/settings.toml.
+name = "gnur"
+title = "GNU R"
+description = "The reference interpreter: AST interpreter and byte-code compiler"
+status = "validated"
+layouts = true

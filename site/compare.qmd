@@ -1,6 +1,6 @@
 ---
 title: "Compare"
-subtitle: "Any two versions or configurations on the same machine"
+subtitle: "Any two versions, configurations or implementations on the same machine"
 ---
 
 ```{r}
@@ -9,10 +9,15 @@ source("R/site.R")
 runs <- D$runs
 keep_devel <- runs$run[runs$kind == "devel"]
 keep_devel <- utils::tail(keep_devel[order(runs$date[match(keep_devel, runs$run)])], 30)
-runs <- runs[runs$kind == "release" | runs$run %in% keep_devel, ]
+# other implementations: the latest 30 commits of each
+commits <- runs[runs$kind == "commit", ]
+keep_commit <- unlist(lapply(split(commits, commits$impl), function(r) utils::tail(r$run[order(r$date)], 30)))
+runs <- runs[runs$kind == "release" | runs$run %in% c(keep_devel, keep_commit), ]
 runs$label <- ifelse(runs$kind == "release",
                      paste0("R ", runs$version, ifelse(runs$config == "default", "", paste0(" · ", runs$config))),
-                     paste0("R-devel r", runs$svn_rev, " (", format(runs$date, "%e %b"), ")"))
+              ifelse(runs$kind == "devel",
+                     paste0("R-devel r", runs$svn_rev, " (", format(runs$date, "%e %b"), ")"),
+                     paste0(runs$impl, " ", substr(runs$version, 1, 8), " (", format(runs$date, "%e %b"), ")")))
 runs$date <- as.character(runs$date)
 est <- D$est[D$est$run %in% runs$run, c("run", "benchmark", "log_mean", "log_se", "n", "est_ms")]
 est$log_mean <- round(est$log_mean, 5); est$log_se <- round(est$log_se, 5); est$est_ms <- round(est$est_ms, 2)

@@ -1,10 +1,13 @@
 #!/bin/bash
-# speedR on a benchmark node: build a GNU R source tree in the toolchain image
-# (build/: housekeeping CPUs, no network), then run the timing pass on it in the
-# same image, or the profile pass in the profile image on top of it, pinned to
-# the isolated CPU, with no network.
+# speedR on a benchmark node: build an R implementation in the toolchain image
+# (build/: housekeeping CPUs, no network), GNU R or another one (impls/, in
+# its own image on top of it), then run the timing pass on it in the same
+# image, or the profile pass in the profile image on top of it, pinned to the
+# isolated CPU, with no network.
 #
-#   speedr-node image                         build the toolchain and profile images
+#   speedr-node image                         build the toolchain, profile and
+#                                             implementations' images
+#   speedr-node resolve SOURCE                its label: fetch it if need be
 #   speedr-node env|id SOURCE                 the build settings | the build id
 #   speedr-node configure SOURCE              configure only; print config.h
 #   speedr-node build SOURCE                  build R (cached by build id) in $work/r/<id>
@@ -20,11 +23,13 @@
 #                                             -> the same places
 #
 # The machine is $SPEEDR_MACHINE, by default the Slurm partition
-# (machines/<name>.toml). SOURCE is a release (4.6.2), `devel` or `patched`
-# (today's snapshot, kept as devel-r<svn revision>), such a label
-# (devel-r90937), or a source tarball. How a
-# version is built: build/settings.toml. Data (sources, logs, results) goes to
-# $SPEEDR_WORK (~/speedr-work); this checkout needs `uv sync` once.
+# (machines/<name>.toml). SOURCE is a GNU R release (4.6.2), `devel` or
+# `patched` (today's snapshot, kept as devel-r<svn revision>), such a label
+# (devel-r90937), or a source tarball; or another implementation at a branch
+# or commit, IMPL@REF (rcp@main), kept as IMPL-<commit, 12 digits>. How a GNU R
+# version is built: build/settings.toml; another implementation:
+# impls/<name>/. Data (sources, logs, results) goes to $SPEEDR_WORK
+# (~/speedr-work); this checkout needs `uv sync` once.
 set -euo pipefail
 repo=$(cd "$(dirname "$0")/.." && pwd)
 work=${SPEEDR_WORK:-$HOME/speedr-work}
@@ -70,9 +75,52 @@ snapshot() {  # devel|patched -> label of today's snapshot, downloaded into src/
     echo "$1-r$rev"
 }
 
-resolve() {  # SOURCE -> label; its tarball is then $work/src/R-<label>.tar.gz
+impl_of() {  # LABEL -> its implementation: <name> of <name>-<commit>, or gnur
+    if [[ $1 =~ ^([a-z][a-z0-9]*)-[0-9a-f]{12}$ ]] && [ -f "$repo/impls/${BASH_REMATCH[1]}/impl.toml" ]; then
+        echo "${BASH_REMATCH[1]}"
+    else
+        echo gnur
+    fi
+}
+
+impl_settings() { "$repo/.venv/bin/speedr" impls "$1"; }   # NAME -> impl_repo=... (eval them)
+
+tarball() {  # LABEL -> its source tarball
+    if [ "$(impl_of "$1")" = gnur ]; then echo "$work/src/R-$1.tar.gz"; else echo "$work/src/$1.tar.gz"; fi
+}
+
+impl_source() {  # IMPL REF -> label IMPL-<commit>; the commit's source, with its
+    # submodules and whatever its fetch.sh adds, in $work/src/<label>.tar.gz and
+    # what it is in <label>.env
+    local impl=$1 ref=$2 t commit label
+    eval "$(impl_settings "$impl")"
+    resolve "$impl_base" > /dev/null   # its base release's tarball (fetch.sh, extra package)
+    t=$(mktemp -d -p "$work/src")
+    git clone -q --filter=blob:none --no-checkout "$impl_repo" "$t/src"
+    commit=$(git -C "$t/src" rev-parse --verify -q "origin/$ref^{commit}" ||
+             git -C "$t/src" rev-parse --verify -q "$ref^{commit}") ||
+        { rm -rf "$t"; echo "$impl: no branch or commit $ref in $impl_repo" >&2; exit 1; }
+    label=$impl-${commit:0:12}
+    if [ ! -s "$work/src/$label.tar.gz" ]; then
+        git -C "$t/src" -c advice.detachedHead=false checkout -q "$commit"
+        git -C "$t/src" submodule -q update --init --recursive --depth 1
+        [ "$impl_fetch" = 0 ] || (cd "$t/src" && "$repo/impls/$impl/fetch.sh" "$(tarball "$impl_base")")
+        {
+            echo "impl=$impl"; echo "base=$impl_base"; echo "repo=$impl_repo"; echo "ref=$ref"
+            echo "commit=$commit"; echo "commit_date=$(git -C "$t/src" log -1 --format=%cI "$commit")"
+        } > "$t/source.env"
+        tar -C "$t/src" --exclude=.git -czf "$t/source.tar.gz" .
+        mv "$t/source.env" "$work/src/$label.env"
+        mv "$t/source.tar.gz" "$work/src/$label.tar.gz"
+    fi
+    rm -rf "$t"
+    echo "$label"
+}
+
+resolve() {  # SOURCE -> label; its tarball is then $(tarball <label>)
     local s=$1 label rev f
     case $s in
+        *@*) impl_source "${s%%@*}" "${s#*@}"; return ;;
         devel|patched) snapshot "$s"; return ;;
         *.tar.gz)
             rev=$(tarball_file "$s" SVN-REVISION | sed -n 's/^Revision: *//p')
@@ -88,48 +136,86 @@ resolve() {  # SOURCE -> label; its tarball is then $work/src/R-<label>.tar.gz
             fi
             echo "$s"; return ;;
         *)
+            if [ "$(impl_of "$s")" != gnur ]; then   # a label: fetched before
+                [ -s "$work/src/$s.tar.gz" ] || { echo "no source $s: give it as IMPL@REF" >&2; exit 1; }
+                echo "$s"; return
+            fi
             [ -s "$work/src/R-$s.tar.gz" ] ||
                 curl -fsSL -o "$work/src/R-$s.tar.gz" "https://cloud.r-project.org/src/base/R-${s%%.*}/R-$s.tar.gz"
             echo "$s" ;;
     esac
 }
 
-source_version() { tarball_file "$work/src/R-$1.tar.gz" VERSION; }   # LABEL -> its VERSION line
+base_of() {  # LABEL -> the GNU R it is: itself, or its implementation's base release
+    local impl; impl=$(impl_of "$1")
+    if [ "$impl" = gnur ]; then echo "$1"; else sed -n 's/^base=//p' "$work/src/$1.env"; fi
+}
 
-source_date() {  # LABEL -> the date of its source (SVN-REVISION's Last Changed Date)
+source_version() { tarball_file "$work/src/R-$(base_of "$1").tar.gz" VERSION; }   # LABEL -> its VERSION line
+
+source_date() {  # LABEL -> the date of its source: SVN-REVISION's Last Changed Date, or the commit's
+    if [ "$(impl_of "$1")" != gnur ]; then sed -n 's/^commit_date=//p' "$work/src/$1.env"; return; fi
     tar --warning=no-unknown-keyword -xzOf "$work/src/R-$1.tar.gz" --wildcards '*/SVN-REVISION' | sed -n 's/^Last Changed Date: *//p' | head -1
 }
 
-extra_pkg_file() {  # LABEL -> the extra package's tarball current on CRAN at that date
+extra_pkg_file() {  # LABEL -> the extra package's tarball current on CRAN at the date of its GNU R
     curl -fsSL "$cran/Archive/$extra_pkg/" "$cran/" |
         grep -o -E ">${extra_pkg}_[0-9.-]+\\.tar\\.gz</a> +[0-9-]+" | sed -E 's/^>//; s#</a> +# #' |
-        awk -v d="$(source_date "$1")" '$2 <= d' | sort -k2 | tail -1 | cut -d' ' -f1
+        awk -v d="$(source_date "$(base_of "$1")")" '$2 <= d' | sort -k2 | tail -1 | cut -d' ' -f1
 }
 
 flags_env() { "$repo/.venv/bin/speedr" build-env "$(source_version "$1")"; }
 
-build_id() {  # LABEL -> id, from speedr.ids (tarball, settings, package, toolchain image)
-    local sha toolchain
-    sha=$(sha256sum "$work/src/R-$1.tar.gz" | cut -d' ' -f1)
-    toolchain=$(docker image inspect --format '{{.Id}}' "$image")
+image_of() {  # LABEL -> the image it builds and runs in
+    local impl; impl=$(impl_of "$1")
+    if [ "$impl" != gnur ] && [ -f "$repo/impls/$impl/Dockerfile" ]; then echo "speedr-$impl"; else echo "$image"; fi
+}
+
+layouts_of() {  # LABEL -> the code layouts it is installed at (0 alone: R as built)
+    local impl; impl=$(impl_of "$1")
+    if [ "$impl" = gnur ] || { eval "$(impl_settings "$impl")"; [ "$impl_layouts" = 1 ]; }; then
+        echo "$layouts"
+    else
+        echo 0
+    fi
+}
+
+build_id() {  # LABEL -> id, from speedr.ids (source, settings, package, image; for
+    # another implementation its commit and its impls/ recipe)
+    local impl source recipe="" toolchain
+    impl=$(impl_of "$1")
+    if [ "$impl" = gnur ]; then
+        source=$(sha256sum "$work/src/R-$1.tar.gz" | cut -d' ' -f1)
+    else
+        source=$(sed -n 's/^commit=//p' "$work/src/$1.env")
+        recipe=$(cat "$repo/impls/$impl"/*.sh "$repo/build/build-impl.sh" "$repo/build/layouts.sh" | sha256sum | cut -c1-16)
+    fi
+    toolchain=$(docker image inspect --format '{{.Id}}' "$(image_of "$1")")
     flags_env "$1" | "$repo/.venv/bin/python" -c '
 import sys
 from speedr.ids import build_id
-sha, toolchain, package, layouts = sys.argv[1:]
+impl, source, toolchain, package, layouts, recipe = sys.argv[1:]
 flags = dict(line.rstrip("\n").split("=", 1) for line in sys.stdin)
 flags["configure"] = "R defaults (./configure --prefix only)"
 flags["packages"] = package
 flags["layouts"] = layouts
-print(build_id("gnur", sha, "default", flags, toolchain))' "$sha" "$toolchain" "$(extra_pkg_file "$1")" "$layouts"
+if recipe:
+    flags["recipe"] = recipe
+print(build_id(impl, source, "default", flags, toolchain))' \
+        "$impl" "$source" "$toolchain" "$(extra_pkg_file "$1")" "$(layouts_of "$1")" "$recipe"
 }
 
-in_image() {  # LABEL ARGS... -> build/build-r.sh ARGS in the image, with this version's settings
-    local l=$1; shift
+in_image() {  # LABEL ARGS... -> its build script with ARGS in its image, with its settings:
+    # GNU R: build/build-r.sh TARBALL ARGS; another: build/build-impl.sh IMPL TARBALL ARGS
+    local l=$1 impl; shift
+    impl=$(impl_of "$l")
     flags_env "$l" > "$work/flags-$l.env"
     docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp --cpuset-cpus "$housekeeping_cpus" \
         --network none --tmpfs /build:exec,mode=1777,size=8g --env-file "$work/flags-$l.env" \
-        -e SPEEDR_LAYOUTS="$layouts" -v "$repo:$repo:ro" -v "$work:$work" "$image" \
-        "$repo/build/build-r.sh" "$work/src/R-$l.tar.gz" "$@"
+        -e SPEEDR_LAYOUTS="$(layouts_of "$l")" -e SPEEDR_SOURCE_DATE="$(source_date "$l")" \
+        -v "$repo:$repo:ro" -v "$work:$work" "$(image_of "$l")" \
+        $(if [ "$impl" = gnur ]; then echo "$repo/build/build-r.sh"; else echo "$repo/build/build-impl.sh $impl"; fi) \
+        "$(tarball "$l")" "$@"
 }
 
 # the container runs under dockerd, not this script: when Slurm cancels the job
@@ -138,7 +224,8 @@ name=""
 trap '[ -n "$name" ] && docker kill "$name" >/dev/null 2>&1; exit 143' TERM INT
 
 bench() {  # NAME timing|profile R ARGS... -> drivers/<pass>.py in its image, on the bench CPU
-    name=speedr-$1-$(date +%s)-$$; local pass=$2 r=$3 img=$image; shift 3
+    # (timing: $bench_image, the image of the implementation measured)
+    name=speedr-$1-$(date +%s)-$$; local pass=$2 r=$3 img=${bench_image:-$image}; shift 3
     [ "$pass" = timing ] || img=$profile_image
     # setup() caches inputs in the benchmarks' data/ folders, some per R
     # version (Matrix objects): start every pass without them
@@ -212,6 +299,13 @@ image)
     # perf as the node's kernel has it
     docker build --cpuset-cpus "$housekeeping_cpus" -t "$profile_image" -f "$repo/build/Dockerfile.profile" \
         --build-arg PERF="$(dpkg-query -W -f='${Version}' linux-perf)" "$repo/build"
+    for d in "$repo"/impls/*/Dockerfile; do
+        [ -e "$d" ] || continue
+        docker build --cpuset-cpus "$housekeeping_cpus" -t "speedr-$(basename "$(dirname "$d")")" "$(dirname "$d")"
+    done
+    ;;
+resolve)
+    resolve "$1"
     ;;
 env)
     l=$(resolve "$1"); echo "# R $l: $(source_version "$l"), $(source_date "$l"), $(extra_pkg_file "$l")"
@@ -222,6 +316,7 @@ id)
     ;;
 configure)
     l=$(resolve "$1")
+    [ "$(impl_of "$l")" = gnur ] || { echo "configure is for GNU R sources only" >&2; exit 2; }
     in_image "$l" /tmp/unused configure
     ;;
 build)
@@ -232,12 +327,18 @@ build)
     pkg=$(extra_pkg_file "$l")
     [ -s "$work/src/$pkg" ] || curl -fsL -o "$work/src/$pkg" "$cran/$pkg" ||
         curl -fsSL -o "$work/src/$pkg" "$cran/Archive/$extra_pkg/$pkg"
-    in_image "$l" "$prefix" build "$work/src/$pkg" > "$work/build-$l.log" 2>&1 ||
+    if [ "$(impl_of "$l")" = gnur ]; then
+        in_image "$l" "$prefix" build "$work/src/$pkg"
+    else
+        in_image "$l" "$prefix" "$work/src/$pkg"
+    fi > "$work/build-$l.log" 2>&1 ||
         { echo "R $l: build failed, see $work/build-$l.log"; rm -rf "$prefix"; exit 1; }
     {
         echo "source=$l"; echo "version=$(source_version "$l")"; echo "date=$(source_date "$l")"
-        echo "id=$id"; echo "package=$pkg"; echo "configure=R defaults (./configure --prefix only)"
-        echo "toolchain=$(docker image inspect --format '{{.Id}}' "$image")"
+        echo "id=$id"; echo "package=$pkg"
+        if [ "$(impl_of "$l")" = gnur ]; then echo "configure=R defaults (./configure --prefix only)"
+        else echo "configure=impls/$(impl_of "$l")/build.sh"; fi
+        echo "toolchain=$(docker image inspect --format '{{.Id}}' "$(image_of "$l")")"
         cat "$work/flags-$l.env"
     } > "$prefix/speedr-build.env"
     echo "R $l: built $id"
@@ -262,21 +363,31 @@ run)
     [ "$rc" = 0 ] || exit "$rc"
 
     # one pass of the suite per layout, one process per benchmark in each; the
-    # passes' reports become one (timing.json), the k-th pass its process k
+    # passes' reports become one (timing.json), the k-th pass its process k.
+    # An implementation without layouts runs its every pass as built; one with
+    # a profile.R has it switch it on.
+    impl=$(impl_of "$l"); bench_image=$(image_of "$l"); built=$(layouts_of "$l")
+    switch=(); [ ! -f "$repo/impls/$impl/profile.R" ] || switch=(--profile "$repo/impls/$impl/profile.R")
     rc=0; k=0
     for pad in $layouts; do
         k=$((k + 1)); r=$work/r/$id/bin/R
-        [ "$pad" = 0 ] || r=$work/r/$id/layout/$pad/bin/R
+        [ "$pad" = 0 ] || [ "$built" = 0 ] || r=$work/r/$id/layout/$pad/bin/R
         bench "run$k" timing "$r" --runs 1 --json "$out/timing-$k.json" --csv "$out/timing-$k.csv" \
-            --dir "$out/exec-$k" "$@" || rc=$?
+            --dir "$out/exec-$k" "${switch[@]}" "$@" || rc=$?
     done
     "$repo/.venv/bin/speedr" merge-passes "$out"/timing-[0-9]*.json > "$out/timing.json" || rc=1
-    { describe "$rc"; echo "layouts=$layouts"; } > "$out/run.env.new"
+    {
+        describe "$rc"; echo "layouts=$built"
+        [ "$impl" = gnur ] || cat "$work/src/$l.env"   # impl, base, repo, ref, commit, commit_date
+    } > "$out/run.env.new"
     to_spool
     exit $rc
     ;;
 profile)
     start "$1"; shift
+    # perf would see another implementation's generated code as unknown frames,
+    # and the category rules know GNU R's interpreter only
+    [ "$(impl_of "$l")" = gnur ] || { echo "the profile pass is for GNU R only, not $l"; exit 2; }
     echo "R $l (build $id) on $machine: profile $run_id on CPU $bench_cpus, kernel $(uname -r)"
     # the build as built (layout 0); then the recordings' category shares
     # (categories/categorize.R, on the housekeeping CPUs). Once reduced, the
@@ -305,5 +416,5 @@ profile)
     to_spool
     exit $rc
     ;;
-*) echo "usage: $0 image | env|id|configure|build SOURCE | sentinel | run|profile SOURCE [driver args]" >&2; exit 2 ;;
+*) echo "usage: $0 image | resolve|env|id|configure|build SOURCE | sentinel | run|profile SOURCE [driver args]" >&2; exit 2 ;;
 esac

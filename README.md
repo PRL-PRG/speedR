@@ -20,9 +20,10 @@ Performance*.
 | [`speedr/`](speedr/) | the pipeline (Python): identifiers, machine registry, run metadata, the suite pin, build settings, the sentinel, the ingest into speedR-results |
 | [`drivers/`](drivers/) | the timing and profile passes, built on r-benchmarks' `rbench` and `rbench.perf` |
 | [`categories/`](categories/) | the perf frame classifier from VMIL'26 (`perf-rules.R`) and the step that turns recordings into category shares |
+| [`impls/`](impls/) | the R implementations: GNU R, the reference, and the others measured against it (rcp), one directory each ([how to add one](impls/README.md)) |
 | [`machines/`](machines/) | one TOML file per machine: a set of identical boxes, with the sentinel's reference times |
 | [`build/`](build/) | how R is built: the toolchain image (upstream GCC 16), the per-version settings ([`settings.toml`](build/settings.toml)) and the build script |
-| [`node/`](node/) | running on the cluster: `speedr-node` (build; sentinel and timing pass, results to the controller), `speedr-submit` (queue it as a Slurm job) and, on the controller, `speedr-publish` (ingest and push to speedR-results) |
+| [`node/`](node/) | running on the cluster: `speedr-node` (build; sentinel and timing pass, results to the controller), `speedr-submit` (queue it as a Slurm job) and, on the controller, `speedr-publish` (ingest and push to speedR-results) and `speedr-nightly` (queue the tracked branches' new commits) |
 | [`configs.toml`](configs.toml) | build configurations: default, no-bytecode, LTO, GC variants, PGO, ... |
 | [`methodology/`](methodology/) | methodology versions: every run records the one it was measured under ([rules](methodology/README.md)) |
 | [`docs/`](docs/) | [benchmarking guidelines](docs/guidelines.md) (draft) |
@@ -95,6 +96,7 @@ From the controller:
 speedr-submit build 4.5.2 devel   # one build job each (devel: today's R-devel snapshot)
 speedr-submit run 4.5.2           # build if needed, then the sentinel and the timing pass
 speedr-submit profile 4.5.2       # build if needed, then the profile pass (category shares)
+speedr-submit run rcp@main        # another implementation, at a branch or commit (impls/)
 uv run speedr build-env 3.6.1     # the compilers and settings an R version is built with
 ```
 

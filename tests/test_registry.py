@@ -1,6 +1,6 @@
 import pytest
 
-from speedr import configs, machines
+from speedr import configs, impls, machines
 
 
 def test_repository_machines_are_valid():
@@ -53,3 +53,26 @@ def test_configs_need_a_default(tmp_path):
     p.write_text('[lto]\ndescription = "x"\n')
     with pytest.raises(configs.ConfigError, match="default"):
         configs.load_all(p)
+
+
+def test_repository_impls_are_valid():
+    reg = impls.load_all()
+    assert reg["gnur"].reference and not reg["gnur"].base
+    for i in reg.values():
+        assert i.reference or (i.directory / "build.sh").is_file()
+
+
+@pytest.mark.parametrize("toml, message", [
+    ('name = "x1"\ntitle = "X"\ndescription = "d"\nrepo = "git@github.com:a/b"\nbase = "4.5.2"',
+     "https://"),
+    ('name = "x1"\ntitle = "X"\ndescription = "d"\nrepo = "https://a/b"\nbase = "devel"',
+     "base must be a GNU R release"),
+    ('name = "x1"\ntitle = "X"\ndescription = "d"\nrepo = "https://a/b"\nbase = "4.5.2"',
+     "needs a build.sh"),
+    ('name = "x1"\ntitle = "X"\ndescription = "d"\nflavour = "mint"', "unknown keys"),
+])
+def test_invalid_impls_are_rejected(tmp_path, toml, message):
+    (tmp_path / "x1").mkdir()
+    (tmp_path / "x1" / "impl.toml").write_text(toml)
+    with pytest.raises(impls.ImplError, match=message):
+        impls.load(tmp_path / "x1")

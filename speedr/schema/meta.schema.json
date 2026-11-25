@@ -41,18 +41,19 @@
     },
     "impl": {
       "type": "string",
-      "description": "gnur now; later rcp, rsh, fastr",
+      "description": "The R implementation (impls/): gnur, rcp, ...",
       "pattern": "^[a-z][a-z0-9-]*$"
     },
     "version": {
       "type": "string",
-      "description": "4.5.2 for a release, devel for R-devel",
-      "pattern": "^([0-9]+\\.[0-9]+\\.[0-9]+|devel)$"
+      "description": "4.5.2 for a release, devel for R-devel; another implementation's commit, its first 12 hex digits",
+      "pattern": "^([0-9]+\\.[0-9]+\\.[0-9]+|devel|[0-9a-f]{12})$"
     },
     "kind": {
       "enum": [
         "release",
-        "devel"
+        "devel",
+        "commit"
       ]
     },
     "svn_rev": {
@@ -67,7 +68,34 @@
         "string",
         "null"
       ],
-      "description": "For other implementations: the GNU R they derive from"
+      "description": "For another implementation: the GNU R release it is built from, and compared with"
+    },
+    "commit": {
+      "type": "object",
+      "description": "For another implementation: the commit measured (kind commit)",
+      "required": [
+        "repo",
+        "sha",
+        "date"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "repo": {
+          "type": "string"
+        },
+        "ref": {
+          "type": "string",
+          "description": "the branch or commit it was asked for"
+        },
+        "sha": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "date": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
     },
     "config": {
       "type": "string",

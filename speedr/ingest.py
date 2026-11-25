@@ -8,7 +8,11 @@ speedR-results (layout: results.py).
         sentinel.json      the sentinel before it (speedr sentinel)
         probe.json         the node's probe before the job (prlprg-bench prolog)
 
-or, for a run of the profile pass (`pass=profile` in run.env), instead of the
+A run of another implementation than GNU R says so in run.env (impl, its
+base release, the commit: impls/); it is kind `commit`, its version the
+commit's first 12 hex digits.
+
+A run of the profile pass (`pass=profile` in run.env) has, instead of the
 timing pass and its sentinel
 
         profile.json       bench's report of the profile pass
@@ -116,8 +120,11 @@ def run_design(report: dict) -> dict:
             "warmups": sum(i["warmup"] for i in full["iterations"])}
 
 
-def _kind(label: str) -> tuple[str, str, int | None]:
-    """(version, kind, svn_rev) of a source label: 4.5.2, or devel-r<rev>."""
+def _kind(label: str, run: dict) -> tuple[str, str, int | None]:
+    """(version, kind, svn_rev) of a source label: 4.5.2, devel-r<rev>, or
+    another implementation's <impl>-<commit>."""
+    if run.get("impl", "gnur") != "gnur":
+        return run["commit"][:12], "commit", None
     if label.startswith("devel-r"):
         return "devel", "devel", int(label.removeprefix("devel-r"))
     if label.startswith("patched"):
@@ -144,10 +151,11 @@ def build_meta(spool_run: Path) -> dict:
     run, build = read_env(spool_run / "run.env"), read_env(spool_run / "speedr-build.env")
     kind_of_pass = _pass(spool_run)
     report = json.loads((spool_run / f"{kind_of_pass}.json").read_text())
-    version, kind, rev = _kind(run["label"])
+    version, kind, rev = _kind(run["label"], run)
     m = {
         "schema_version": 1, "run_id": run["run_id"], "methodology": run["methodology"],
-        "machine": run["machine"], "impl": "gnur", "version": version, "kind": kind,
+        "machine": run["machine"], "impl": run.get("impl", "gnur"), "version": version,
+        "kind": kind,
         "svn_rev": rev, "config": run.get("config", "default"),
         "build": {"id": build["id"], "source": run["source_sha256"],
                   "flags": {k: v for k, v in build.items() if k not in BUILD_KEYS},
@@ -173,6 +181,10 @@ def build_meta(spool_run: Path) -> dict:
                         "unattributed_share": statistics.fmean(unattributed or [0.0])}
     if "layouts" in run:
         m["run_design"]["layouts"] = [int(p) for p in run["layouts"].split()]
+    if kind == "commit":
+        m["base_gnur_version"] = run["base"]
+        m["commit"] = {"repo": run["repo"], "ref": run["ref"], "sha": run["commit"],
+                       "date": run["commit_date"]}
     if (probe := _json(spool_run / "probe.json")) is not None:
         m["host"]["probe"] = probe
     if (sentinel := _json(spool_run / "sentinel.json")) is not None:
@@ -237,7 +249,7 @@ def rebuild_index(mdir: Path) -> None:
     latest_host: dict[str, dict] = {}
     for path in sorted(mdir.glob("*/*/*/*/*/meta.json")):
         m = json.loads(path.read_text())
-        date = m["build"].get("source_date", m["started"][:10])
+        date = m["build"].get("source_date", m["started"][:10])[:10]
         if m["passes"] == ["profile"]:
             profiles += profile_index(m, date, read_csv(path.parent / "profiles.csv"))
             continue
@@ -256,6 +268,8 @@ def rebuild_index(mdir: Path) -> None:
             "n_total": len({r["benchmark"] for r in rows}), "node": m["host"]["node"],
             "started": m["started"], "sentinel_status": sentinel.get("status", ""),
             "probe_status": probe.get("status", ""), "thermal_suspect": thermal,
+            "base": m.get("base_gnur_version") or "", "commit": m.get("commit", {}).get("sha", ""),
+            "ref": m.get("commit", {}).get("ref", ""),
         })
         for r in rows:
             samples.append({"run": m["run_id"]} | r)
@@ -264,7 +278,7 @@ def rebuild_index(mdir: Path) -> None:
             unsupported.append({"machine": m["machine"], "impl": m["impl"],
                                 "version": m["version"], "config": m["config"],
                                 "benchmark": b, "reason": _first_line(reason)})
-        for b in ok:
+        for b in ok if m["impl"] == "gnur" else ():   # the GNU R release it runs on from
             if b not in first_ok or _version_key(m["version"]) < _version_key(first_ok[b]):
                 first_ok[b] = m["version"]
         if m["started"] >= latest_host.get(m["machine"], {}).get("started", ""):
@@ -295,7 +309,7 @@ def rebuild_index(mdir: Path) -> None:
         "samples.csv": samples,
     }
     extra = {"runs.csv": ["node", "started", "sentinel_status", "probe_status",
-                          "thermal_suspect"],
+                          "thermal_suspect", "base", "commit", "ref"],
              "samples.csv": ["cpu_temp_max", "cpu_throttle", "suspect"],
              "profiles.csv": PROFILE_RUN_COLUMNS}
     for name, rows in tables.items():

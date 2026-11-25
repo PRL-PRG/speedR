@@ -1,0 +1,25 @@
+#!/bin/bash
+# On the controller, as speedr (cron, every night): for every implementation
+# that tracks a branch (`track` in impls/<name>/impl.toml), queue a run of the
+# branch when its head moved: a commit not yet queued by this, nor measured.
+#
+#   speedr-nightly [RESULTS]   default ~/speedR-results
+set -euo pipefail
+repo=$(cd "$(dirname "$0")/.." && pwd)
+results=${1:-$HOME/speedR-results}
+queued=$HOME/.speedr-nightly   # "<impl> <commit>" for every commit queued so far
+touch "$queued"
+speedr=$repo/.venv/bin/speedr
+for name in $("$speedr" impls | awk '{ print $1 }'); do
+    eval "$("$speedr" impls "$name")"
+    [ -n "$impl_track" ] || continue
+    commit=$(git ls-remote "$impl_repo" "refs/heads/$impl_track" | cut -f1)
+    [ -n "$commit" ] || { echo "$name: no branch $impl_track in $impl_repo" >&2; continue; }
+    grep -qx "$name $commit" "$queued" && continue
+    if compgen -G "$results/*/$name/*/${commit:0:12}" > /dev/null; then   # measured already
+        echo "$name $commit" >> "$queued"; continue
+    fi
+    # the job takes the branch's head when it starts, and records the branch
+    echo "$(date -u +%FT%TZ) $name $impl_track at ${commit:0:12}: $(/usr/local/bin/speedr-submit run "$name@$impl_track")"
+    echo "$name $commit" >> "$queued"
+done

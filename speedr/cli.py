@@ -11,6 +11,7 @@ from . import (
     __version__,
     build,
     configs,
+    impls,
     ingest,
     machines,
     meta,
@@ -32,6 +33,18 @@ def cmd_machines(args: argparse.Namespace) -> int:
 def cmd_configs(args: argparse.Namespace) -> int:
     for c in configs.load_all().values():
         print(f"{c.name:12} {c.status:8} {c.description}")
+    return 0
+
+
+def cmd_impls(args: argparse.Namespace) -> int:
+    reg = impls.load_all()
+    if args.name:
+        if args.name not in reg:
+            raise impls.ImplError(f"no implementation {args.name!r} in impls/ ({', '.join(reg)})")
+        print(reg[args.name].shell())
+        return 0
+    for i in reg.values():
+        print(f"{i.name:8} {i.status:12} base={i.base or '-':7} track={i.track or '-':6} {i.title}")
     return 0
 
 
@@ -113,6 +126,9 @@ def parser() -> argparse.ArgumentParser:
         func=cmd_machines)
     sub.add_parser("configs", help="list and validate configs.toml").set_defaults(
         func=cmd_configs)
+    im = sub.add_parser("impls", help="list and validate impls/*/impl.toml")
+    im.add_argument("name", nargs="?", help="print this one's settings as shell assignments")
+    im.set_defaults(func=cmd_impls)
     mv = sub.add_parser("methodology", help="list the methodology versions")
     mv.add_argument("--current", action="store_true", help="print only the one new runs use")
     mv.set_defaults(func=cmd_methodology)
@@ -158,6 +174,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         return args.func(args)
     except (machines.MachineError, configs.ConfigError, methodology.MethodologyError,
+            impls.ImplError,
             build.BuildError,
             upstream.UpstreamError) as e:
         print(f"speedr: {e}", file=sys.stderr)

@@ -67,6 +67,37 @@ repetition and process management belong to the shared harness, driven by the
   is repeated: the binary is byte for byte what compiling with the filler
   gives, and the rest of the installation is the same files.
 
+## Other implementations {#implementations}
+
+speedR measures other implementations of R next to GNU R, each against the
+GNU R release it is built on. One is measured so far: **rcp**, a
+copy-and-patch JIT compiler (*Copy-and-Patch Just-in-Time Compiler for R*,
+VMIL 2025): an R package on a patched GNU R 4.5.2, both in
+[r-compile-server](https://github.com/PRL-PRG/r-compile-server).
+
+- An implementation is measured at **commits** of its repository: any commit
+  on request, and its main branch every night it moved. A commit is
+  identified by its hash and dated by its commit date.
+- It is built **like GNU R**: the same compiler and the settings of the
+  release it is built on, the same recommended packages (taken from that
+  release's source tarball), the same extra package, and, where it is a GNU R
+  build tree as rcp's is, the same four code layouts. rcp's patched R is
+  configured with R's defaults plus `-DRCP`, the variant the rcp package needs,
+  then the rcp package is installed into it.
+- It runs the **same harness, run design and statistics** as GNU R, on the same
+  machines. What switches it on goes in a file the harness sources before the
+  benchmark. For rcp, `execute()` is compiled with `rcp_cmpfun()` (optimisation
+  level 3) after `setup()` and before the first iteration, as rcp's own
+  benchmarks do; what `execute()` calls runs as R runs it. Compiling is outside
+  the measured iterations, as GNU R's byte-compiling of `execute()` is, which
+  happens in the warm-up.
+- A benchmark it cannot run, or cannot compile, is recorded as failing for that
+  commit, never measured as plain R.
+- Speedups compare a commit with the **GNU R release it is built on**, measured
+  on the same machine under the same methodology: over the benchmarks both ran.
+- **Profiles** are recorded for GNU R only: perf does not see a JIT's generated
+  code without its help, and the category rules know GNU R's interpreter.
+
 ## How a run is measured
 
 - Every benchmark runs in **4 separate R processes, one on each code

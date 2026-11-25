@@ -157,3 +157,28 @@ def test_ingest_profile_run(tmp_path):
     assert m["profile"]["unattributed_share"] == pytest.approx(0.05)
     assert [r["cause"] for r in ingest.read_csv(run / "causes.csv")] == ["unresolved stack"]
     assert results.check(root) == []
+
+
+def test_ingest_another_implementation(tmp_path):
+    """A run of rcp at a commit: its own series, kind commit, compared with its base."""
+    spool, root = tmp_path / "spool", tmp_path / "results"
+    spool_run(spool)
+    sha = "2683bf7642f68d579b2dc5fd15243aba3cc44513"
+    d = spool_run(spool, label=f"rcp-{sha[:12]}", run_id="20261125T030000Z-0dd123")
+    (d / "run.env").write_text((d / "run.env").read_text() + (
+        f"impl=rcp\nbase=4.5.2\nrepo=https://github.com/PRL-PRG/r-compile-server\nref=main\n"
+        f"commit={sha}\ncommit_date=2026-11-24T10:00:00+01:00\n"))
+    root.mkdir()
+
+    assert len(ingest.ingest(spool, root)) == 2
+    run = root / "0.1" / "rcp" / "kabylake" / sha[:12] / "default" / "20261125T030000Z-0dd123"
+    m = json.loads((run / "meta.json").read_text())
+    assert (m["impl"], m["kind"], m["version"], m["base_gnur_version"]) == (
+        "rcp", "commit", sha[:12], "4.5.2")
+    assert m["commit"]["sha"] == sha and m["commit"]["ref"] == "main"
+    runs = {r["impl"]: r for r in ingest.read_csv(root / "0.1" / "index" / "runs.csv")}
+    assert runs["rcp"]["base"] == "4.5.2" and runs["rcp"]["commit"] == sha
+    assert runs["gnur"]["base"] == "" and runs["gnur"]["kind"] == "release"
+    bench = ingest.read_csv(root / "0.1" / "index" / "benchmarks.csv")
+    assert {b["min_version"] for b in bench} == {"4.5.2"}   # GNU R's releases only
+    assert results.check(root) == []
