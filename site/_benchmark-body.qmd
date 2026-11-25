@@ -26,7 +26,7 @@ tiles(
   tile(paste0("R ", last_row$version, " vs R ", base_v), fmt_speedup(sp),
        paste(fmt_ms(base_row$est_ms), "→", fmt_ms(last_row$est_ms))),
   tile(paste("Time on R", last_row$version), fmt_ms(last_row$est_ms),
-       sprintf("%d processes · ±%.1f%%", last_row$n, 100 * Z * last_row$log_se)),
+       sprintf("%d processes · ±%.1f%%", last_row$n, 100 * tq(last_row$n - 1) * last_row$log_se)),
   if (nrow(top)) tile("Most time in", top$category, sprintf("%.0f%% of samples (R %s)", 100 * top$share, last_row$version)),
   tile("Runs on", paste0("R ≥ ", b$min_version),
        if (b$min_version != "3.0.0") "not measured on older releases" else "every release since 3.0.0")
@@ -39,7 +39,7 @@ div(class = "rs-card",
   div(class = "rs-card-sub", "Geometric mean over processes with its 95% interval; lower is faster. Times are only comparable within a machine."),
   machine_tabs(D$machines$machine, function(mm) {
     d <- rel_b[rel_b$machine == mm, ]
-    d$lo <- exp(d$log_mean - Z * d$log_se); d$hi <- exp(d$log_mean + Z * d$log_se)
+    q <- tq(d$n - 1); d$lo <- exp(d$log_mean - q * d$log_se); d$hi <- exp(d$log_mean + q * d$log_se)
     hover <- sprintf("<b>R %s</b><br>%s (95%% CI %s–%s)", d$version, fmt_ms(d$est_ms), fmt_ms(d$lo), fmt_ms(d$hi))
     p <- plot_ly(d, x = ~date, height = 330) |>
       add_ribbons(ymin = ~lo, ymax = ~hi, fillcolor = LIGHT[["band"]], line = list(width = 0),

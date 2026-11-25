@@ -88,12 +88,13 @@ Both take `--config NAME` (run-time environment from `configs.toml`),
 
 On the benchmark machines (a Slurm cluster; its setup is not part of this
 repository), each node has this repository checked out as `~speedr/speedr`
-(`uv sync` once) and the toolchain image built (`node/speedr-node image`).
+(`uv sync` once) and the toolchain and profile images built (`node/speedr-node image`).
 From the controller:
 
 ```sh
 speedr-submit build 4.5.2 devel   # one build job each (devel: today's R-devel snapshot)
 speedr-submit run 4.5.2           # build if needed, then the sentinel and the timing pass
+speedr-submit profile 4.5.2       # build if needed, then the profile pass (category shares)
 uv run speedr build-env 3.6.1     # the compilers and settings an R version is built with
 ```
 
@@ -117,9 +118,9 @@ SPEEDR_RESULTS_ROOT=../../speedR-results ./render.sh       # real data, one site
 |---|---|---|
 | 1 | repositories, licences, contributor guide, CI | in progress |
 | 2 | build layer: pinned images, GNU R builds 3.0.0 to R-devel | done |
-| 3 | timing pass, results repository, scheduler, power management | done (methodology 0.2, draft) |
+| 3 | timing pass, results repository, scheduler, power management | done (methodology 0.5, draft) |
 | 4 | dashboard on real data | first releases |
-| 5 | profiles: perf pass, categorisation, quality gates | |
+| 5 | profiles: perf pass, categorisation, quality gates | perf pass and categorisation (methodology 0.5, draft) |
 | 6 | nightly R-devel and change detection | |
 | 7 | backfill of 3.x releases | |
 | 8 | configurations: no-bytecode, LTO, GC variants, PGO | |

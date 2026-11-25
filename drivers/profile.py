@@ -1,5 +1,5 @@
 """speedR's profile pass: r-benchmarks' rbench.perf app with speedR's R
-command and the VMIL26 recording settings (see common.py).
+command and the VMIL26 recording settings (speedr/profile.py, see common.py).
 
 Always pass --dir: the R process's stdout, which carries the MARK lines the
 reduce step needs, is only written by the dir reporter.
@@ -11,9 +11,7 @@ import common
 import rbench.perf as rp
 from bench import ByBenchmarkMetricSummary, Context, FixedRuns, Params, SystemProbe, Time, bench_app
 
-# VMIL26's recipe, which perf-rules.R was validated with. r-benchmarks'
-# rbench.perf defaults are 1999 Hz, a 16 kB stack dump and 1 recording.
-PERF = {"freq": 999, "stack_size": 32768, "recordings": 5}
+from speedr.profile import PERF  # VMIL26's recording settings
 
 
 class ProfileParams(rp.RbenchProfileParams):
@@ -42,6 +40,7 @@ APP = (
     bench_app(params=ProfileParams)
     .add(rp.rb.ALL_SUITES.with_env(lambda ctx: {"R_LIBS": str(ctx.params.get_library_path)}))
     .with_command(command)
+    .with_filter(common.kept)
     .with_env(lambda ctx: common.config_env(ctx.params.config))
     .with_hook(lambda ctx: ctx.params.get_install_packages_hook)
     .with_runs(lambda ctx: FixedRuns(ctx.params.recordings))

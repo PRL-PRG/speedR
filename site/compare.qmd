@@ -14,7 +14,7 @@ runs$label <- ifelse(runs$kind == "release",
                      paste0("R ", runs$version, ifelse(runs$config == "default", "", paste0(" · ", runs$config))),
                      paste0("R-devel r", runs$svn_rev, " (", format(runs$date, "%e %b"), ")"))
 runs$date <- as.character(runs$date)
-est <- D$est[D$est$run %in% runs$run, c("run", "benchmark", "log_mean", "log_se", "est_ms")]
+est <- D$est[D$est$run %in% runs$run, c("run", "benchmark", "log_mean", "log_se", "n", "est_ms")]
 est$log_mean <- round(est$log_mean, 5); est$log_se <- round(est$log_se, 5); est$est_ms <- round(est$est_ms, 2)
 pg <- D$profiles[D$profiles$run %in% runs$run, ]
 prof <- data.frame(run = character(), benchmark = character())
@@ -30,7 +30,7 @@ ojs_define(runs = runs[, c("run", "machine", "version", "kind", "config", "date"
            benchmarks = D$benchmarks[, c("id", "suite")],
            machines = D$machines[, c("machine", "os", "arch", "profiles")],
            baselines = lapply(D$baselines, function(b) b$run),
-           groups = GROUPS)
+           groups = GROUPS, tq = round(tq(1:200), 4))
 ```
 
 ::: {.rs-filters}
@@ -76,10 +76,10 @@ rows = {
     if (e.run !== B.run || !a.has(e.benchmark)) continue;
     const x = a.get(e.benchmark);
     const d = x.log_mean - e.log_mean, se = Math.hypot(x.log_se, e.log_se);
-    const sp = Math.exp(d);
-    out.push({benchmark: e.benchmark, suite: suiteOf.get(e.benchmark), speedup: sp,
-              lo: Math.exp(d - 1.96 * se), hi: Math.exp(d + 1.96 * se), ta: x.est_ms, tb: e.est_ms,
-              sig: Math.abs(d) > 1.96 * se && Math.abs(sp - 1) > 0.02});
+    const sp = Math.exp(d), q = tq[Math.min(Math.max(x.n + e.n - 2, 1), tq.length) - 1];
+    out.push({benchmark: e.benchmark, suite: suiteOf.get(e.benchmark), speedup: sp, se,
+              lo: Math.exp(d - q * se), hi: Math.exp(d + q * se), ta: x.est_ms, tb: e.est_ms,
+              sig: Math.abs(d) > q * se && Math.abs(sp - 1) > 0.02});
   }
   return out.sort((p, q) => q.speedup - p.speedup);
 }
@@ -87,7 +87,7 @@ rows = {
 geo = {
   const n = rows.length;
   const m = rows.reduce((s, r) => s + Math.log(r.speedup), 0) / n;
-  const se = Math.sqrt(rows.reduce((s, r) => s + ((Math.log(r.hi) - Math.log(r.lo)) / 3.92) ** 2, 0)) / n;
+  const se = Math.sqrt(rows.reduce((s, r) => s + r.se ** 2, 0)) / n;
   return {n, speedup: Math.exp(m), lo: Math.exp(m - 1.96 * se), hi: Math.exp(m + 1.96 * se),
           faster: rows.filter(r => r.sig && r.speedup > 1).length,
           slower: rows.filter(r => r.sig && r.speedup < 1).length};

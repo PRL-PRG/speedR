@@ -1,5 +1,6 @@
 """`speedr` command line: the registry, the metadata schema, the suite pin,
-build settings, the sentinel, the profile manifest and the ingest."""
+build settings, the sentinel, the profile manifest, the passes of a run and the
+ingest."""
 
 import argparse
 import json
@@ -83,6 +84,12 @@ def cmd_ingest(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_merge_passes(args: argparse.Namespace) -> int:
+    reports = [json.loads(Path(f).read_text()) for f in args.reports]
+    json.dump(ingest.merge_passes(reports), sys.stdout)
+    return 0
+
+
 def cmd_suite(args: argparse.Namespace) -> int:
     for name, commit in upstream.commits().items():
         print(f"{name:7} {commit}")
@@ -131,6 +138,10 @@ def parser() -> argparse.ArgumentParser:
     i.add_argument("spool", metavar="SPOOL")
     i.add_argument("root", metavar="RESULTS")
     i.set_defaults(func=cmd_ingest)
+    mp = sub.add_parser("merge-passes", help="one report of a run's passes, one per code "
+                        "layout: the k-th pass becomes process k")
+    mp.add_argument("reports", nargs="+", metavar="REPORT.json")
+    mp.set_defaults(func=cmd_merge_passes)
     sub.add_parser("suite", help="show the rbench and bench commits, checked against the "
                    "environment").set_defaults(func=cmd_suite)
     pm = sub.add_parser("profile-manifest",

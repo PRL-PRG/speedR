@@ -1,3 +1,4 @@
 version,status,date,summary
 0.1,draft,2026-11-19,"First measurements on the kabylake node: R's default build with GCC 16 as upstream GCC, the C dialect of each release's time, recommended packages"
 0.2,draft,2026-11-20,"Releases of every Ubuntu LTS on the kabylake machine: 3 processes per benchmark, the sentinel and probe before every run, results from r-benchmarks main"
+0.5,draft,2026-11-24,"4 processes per benchmark, each on its own code layout of the build; a 1 ms pause before every iteration; t-intervals with a 0.1% floor; mathkernel/MMM-T1 left out; the profile pass"

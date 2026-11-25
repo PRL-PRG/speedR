@@ -10,6 +10,11 @@ import csv
 import json
 from pathlib import Path
 
+# How each benchmark is recorded: VMIL26's recipe, which categories/perf-rules.R
+# was validated with (r-benchmarks' rbench.perf defaults are 1999 Hz, a 16 kB
+# stack dump and 1 recording). drivers/profile.py takes them as its defaults.
+PERF = {"freq": 999, "stack_size": 32768, "recordings": 5}
+
 MANIFEST_COLUMNS = ["suite", "benchmark", "run", "frames", "stdout"]
 
 

@@ -4,14 +4,20 @@
 # Unit of replication is the R process (an "invocation"): each benchmark is run
 # in several processes, and each process reports one value (the median of its
 # measured iterations). A benchmark's estimate is the geometric mean over
-# processes, with a t-interval on the log scale.
+# processes, with a t-interval on the log scale whose standard error has a floor
+# (FLOOR): what a run carries beyond its processes' spread.
 #
 # NOTE (mockup): the plan calls for a hierarchical bootstrap (processes, then
 # iterations). The analytic interval here has the same interface; swap the body
 # of `estimate_runs()` once iteration-level samples exist.
 
-Z <- 1.96
+Z <- 1.96                  # suite-level intervals: means over many benchmarks
+FLOOR <- 0.001             # added (in quadrature) to every run's log standard error
 CHANGE_THRESHOLD <- 0.02   # |speedup - 1| above this AND a CI excluding 1 => flagged
+
+#' The 97.5% t quantile for a 95% interval with `df` degrees of freedom: n - 1
+#' for one run of n processes, n_a + n_b - 2 for the comparison of two.
+tq <- function(df) stats::qt(0.975, pmax(df, 1))
 
 #' One row per (run, benchmark): log-mean, its standard error, and friends.
 estimate_runs <- function(samples) {
@@ -26,7 +32,7 @@ estimate_runs <- function(samples) {
   parts <- do.call(rbind, strsplit(names(m), "\r", fixed = TRUE))
   data.frame(
     run = type.convert(parts[, 1], as.is = TRUE), benchmark = parts[, 2],
-    log_mean = unname(m), log_se = unname(s / sqrt(n)), n = unname(n),
+    log_mean = unname(m), log_se = unname(sqrt(s^2 / n + FLOOR^2)), n = unname(n),
     est_ms = unname(exp(m)), gc_ms = unname(gc), max_rss_mb = unname(rss),
     stringsAsFactors = FALSE
   )
@@ -35,14 +41,15 @@ estimate_runs <- function(samples) {
 #' Speedup of `new` over `base` per benchmark (base time / new time), with CI.
 #' `base` and `new` are rows of estimate_runs() for one run each.
 speedups <- function(base, new) {
-  j <- merge(base[, c("benchmark", "log_mean", "log_se")],
-             new[, c("benchmark", "log_mean", "log_se")],
+  j <- merge(base[, c("benchmark", "log_mean", "log_se", "n")],
+             new[, c("benchmark", "log_mean", "log_se", "n")],
              by = "benchmark", suffixes = c("_base", "_new"))
   d <- j$log_mean_base - j$log_mean_new
   se <- sqrt(j$log_se_base^2 + j$log_se_new^2)
+  q <- tq(j$n_base + j$n_new - 2)
   data.frame(benchmark = j$benchmark, log_speedup = d, log_se = se,
-             speedup = exp(d), lo = exp(d - Z * se), hi = exp(d + Z * se),
-             significant = abs(d) > Z * se & abs(exp(d) - 1) > CHANGE_THRESHOLD,
+             speedup = exp(d), lo = exp(d - q * se), hi = exp(d + q * se),
+             significant = abs(d) > q * se & abs(exp(d) - 1) > CHANGE_THRESHOLD,
              stringsAsFactors = FALSE)
 }
 
@@ -149,7 +156,7 @@ devel_changes <- function(est, devel_runs, window = 7, confirm = 3) {
       ref <- stats::median(lm[past])
       d <- ref - lm[j]                       # > 0 => faster
       se <- e$log_se[j] * sqrt(1 + 1 / length(past))
-      sig <- abs(exp(d) - 1) > CHANGE_THRESHOLD && abs(d) > Z * se
+      sig <- abs(exp(d) - 1) > CHANGE_THRESHOLD && abs(d) > tq(2 * (e$n[j] - 1)) * se
       if (!sig) { prev_sign <- 0; next }
       if (sign(d) == prev_sign) next          # same step, already reported
       fut <- which(is_good & seq_along(lm) > j)
