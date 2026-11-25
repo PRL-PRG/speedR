@@ -11,7 +11,7 @@ dependencies = ["jsonschema>=4.22", "rbench"]
 # the benchmarking library underneath, comes with it: rbench pins its commit,
 # and uv.lock records both.
 [tool.uv.sources]
-rbench = { git = "https://github.com/PRL-PRG/r-benchmarks.git", rev = "3deb7dbdc68f926f63210bc00b02a96395067c2f" }
+rbench = { git = "https://github.com/PRL-PRG/r-benchmarks.git", rev = "cf04f706a745b0e8679628aacb6b4df8e3345650" }
 
 # bench with Thermal (PRL-PRG/bench#3, from the fork) until r-benchmarks pins a
 # bench that has it

@@ -10,7 +10,7 @@ source("R/site.R")
 
 ```{r}
 #| eval: !expr "!HAS_PROFILES"
-not_yet("No profiles have been recorded under this methodology version yet: the perf pass is not part of it.")
+not_yet("No profiles have been recorded under this methodology version yet.")
 ```
 
 ```{r}
@@ -109,5 +109,6 @@ rs_table(data.frame(Category = cat_def$category, Group = cat_def$group,
 
 ::: {.rs-notes}
 - Each benchmark is recorded with `perf record` (DWARF call graphs, about 1000 samples per second, 5 recordings). Each sample inside `execute()` is charged to the innermost frame the [category rules](methodology.qmd#profiles) of *What Do R Benchmarks Measure?* (VMIL'26) recognise.
-- Charts colour the four category groups; the ten categories are named in the heatmap and tables, because ten colours cannot be told apart reliably.
+- A release's profile is of the same build its times are of: R as built, with no profiler in the timing pass.
+- Charts colour the four category groups; the eleven categories are named in the heatmap and tables, because eleven colours cannot be told apart reliably.
 :::

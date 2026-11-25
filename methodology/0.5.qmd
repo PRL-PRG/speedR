@@ -162,9 +162,12 @@ state no more than from each other, so one warm-up is enough.
 
 ## Profiles {#profiles}
 
-A second pass records each benchmark 5 times with
-`perf record --call-graph dwarf,32768` on the same build. Only samples
-inside `execute()` are kept, using phase markers the harness prints. Each sample
+A second pass, a job of its own, records each benchmark 5 times with
+`perf record --call-graph dwarf,32768` at 999 Hz, user-space cycles only,
+on the same build: R as built (the first code layout), on the same isolated
+core, never in the timing pass. Each recording is one R process that runs
+`setup()` and then `execute()` once. Only samples inside `execute()` are kept,
+using phase markers the harness prints. Each sample
 is charged to the **innermost stack frame** a rule recognises, checked in this
 order:
 
@@ -177,8 +180,11 @@ order:
    `primitives`, apart from the dispatch primitives (`UseMethod`,
    `NextMethod`, `standardGeneric`).
 
-Samples no rule reaches are reported as **unattributed** and never hidden. A
-run whose unattributed share exceeds 5% fails the quality gate. The rules were
+Samples no rule reaches are reported as **unattributed** and never hidden;
+samples whose innermost recognised frame is R's main loop are `other`. A
+benchmark's share of a category is the mean over its recordings. A profile
+run whose mean unattributed share exceeds 5% fails the quality gate and is
+not published. The rules were
 validated (VMIL'26) on builds like these, without frame pointers. Profiles on platforms without `perf` (macOS:
 samply) are marked *experimental* until their category shares are shown to
 agree with perf.

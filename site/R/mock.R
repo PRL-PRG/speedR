@@ -214,10 +214,15 @@ generate_mock <- function(outdir = "data/mock", registry_path = "data/benchmarks
                               time_ms = round(proc, 2), gc_ms = round(gc, 2),
                               max_rss_mb = rss)
       if (ok[i] && config == "default") {
-        sh <- mt$shares * exp(rnorm(11, 0, 0.04))   # multiplicative: small shares stay > 0
+        sh <- c(mt$shares, other = 0.002)          # every category, as categorize.R writes them
+        sh <- sh * exp(rnorm(length(sh), 0, 0.04))   # multiplicative: small shares stay > 0
         sh <- sh / sum(sh)
-        prow[[i]] <- data.frame(run = run_id, benchmark = b$id[i],
-                                category = names(sh), share = round(unname(sh), 5))
+        # as the index has them: a profile run of its own, of this run's build
+        prow[[i]] <- data.frame(run = paste0("p", run_id), benchmark = b$id[i],
+                                category = names(sh), share = round(unname(sh), 5),
+                                machine = machine, version = version, kind = kind,
+                                config = config, date = date, started = "2026-11-25T02:00:00Z",
+                                recordings = 5L)
       }
     }
     runs[[run_id]] <<- data.frame(

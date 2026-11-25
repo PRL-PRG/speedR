@@ -56,8 +56,17 @@ build_cache <- function() {
   events$date <- as.Date(events$date)
   samples <- utils::read.csv(file.path(dir, "samples.csv"), stringsAsFactors = FALSE)
   samples <- samples[samples$run %in% runs$run, ]
-  profiles <- utils::read.csv(file.path(dir, "profiles.csv"), stringsAsFactors = FALSE)
-  profiles <- profiles[profiles$run %in% runs$run, ]
+  profiles <- utils::read.csv(file.path(dir, "profiles.csv"), stringsAsFactors = FALSE,
+                              colClasses = c(run = "character", version = "character"))
+  # A profile run records a build the timing runs measured (same machine,
+  # version, configuration and source date): the pages show it as theirs, the
+  # newest one if the build was profiled more than once.
+  build <- c("machine", "version", "config", "date")
+  profiles$date <- as.Date(profiles$date)
+  pk <- do.call(paste, profiles[build])
+  profiles <- profiles[profiles$started == ave(profiles$started, pk, FUN = max), ]
+  profiles <- merge(profiles[c(build, "benchmark", "category", "share")],
+                    runs[c(build, "run")], by = build)[c("run", "benchmark", "category", "share")]
 
   est <- estimate_runs(samples)
 
@@ -103,6 +112,7 @@ mem-duplicate,Memory
 mem-gc,Memory
 native-ffi,Native code
 native-blas,Native code
+other,Evaluation
 unattributed,Unattributed", stringsAsFactors = FALSE)
   profiles$group <- cats$group[match(profiles$category, cats$category)]
 

@@ -67,17 +67,18 @@ DARK <- c(
 
 SERIES <- unname(LIGHT[paste0("series", 1:8)])
 
-# The ten VMIL'26 categories, in the paper's order, and the four groups the
-# stacked views use. Ten hues cannot pass the colour-vision checks, so the
+# The VMIL'26 categories, in the paper's order (`other`: R's outer frames, its
+# main loop, when nothing deeper matched), and the four groups the stacked
+# views use. Eleven hues cannot pass the colour-vision checks, so the
 # stacked charts colour by group (4 validated hues + a neutral) and the detail
 # views (heatmap, tables) name every category.
 CATEGORIES <- data.frame(
   category = c("interpreter", "call", "dispatch", "lookup", "primitives",
                "mem-alloc", "mem-duplicate", "mem-gc", "native-ffi", "native-blas",
-               "unattributed"),
+               "other", "unattributed"),
   group = c("Evaluation", "Evaluation", "Evaluation", "Evaluation", "Primitives",
             "Memory", "Memory", "Memory", "Native code", "Native code",
-            "Unattributed"),
+            "Evaluation", "Unattributed"),
   description = c(
     "Bytecode and AST interpreter loops (bcEval, Rf_eval)",
     "Closure calls, argument matching, promises",
@@ -88,11 +89,12 @@ CATEGORIES <- data.frame(
     "Copying values (duplicate, shallow_duplicate)",
     "Garbage collector",
     ".Call/.External/.C into package and system code",
-    "BLAS/LAPACK linear algebra"
-  )[c(1:10, NA)],
+    "BLAS/LAPACK linear algebra",
+    "R's main loop, when no deeper frame matched",
+    "Samples no rule could attribute (shown, never hidden)"
+  ),
   stringsAsFactors = FALSE
 )
-CATEGORIES$description[11] <- "Samples no rule could attribute (shown, never hidden)"
 
 GROUPS <- c("Evaluation", "Primitives", "Memory", "Native code", "Unattributed")
 GROUP_COLORS <- c(

@@ -5,6 +5,7 @@
 #
 #   speedr-submit build SOURCE...            one build job per source
 #   speedr-submit run SOURCE [timing args]   one job: build if needed, then the timing pass
+#   speedr-submit profile SOURCE [profile args]   the same with the profile pass
 #
 # Jobs run as the speedr account, whatever account submits them, from its
 # checkout ~speedr/speedr on the node. Job output: ~speedr/speedr-work/slurm-<job>.out;
@@ -24,9 +25,9 @@ case $cmd in
 build)
     for s in "$@"; do echo "$(job "build R-$s" "$node build $s") build R-$s"; done
     ;;
-run)
+run|profile)
     s=$1; shift
-    echo "$(job "run R-$s" "$node build $s && $node run $s ${*@Q}") run R-$s"
+    echo "$(job "$cmd R-$s" "$node build $s && $node $cmd $s ${*@Q}") $cmd R-$s"
     ;;
-*) echo "usage: $0 build SOURCE... | run SOURCE [timing args]" >&2; exit 2 ;;
+*) echo "usage: $0 build SOURCE... | run|profile SOURCE [driver args]" >&2; exit 2 ;;
 esac

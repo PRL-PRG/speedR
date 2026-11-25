@@ -361,8 +361,13 @@
             "etw"
           ]
         },
+        "profiler_version": {
+          "type": "string",
+          "description": "what the profiler says its version is (perf --version)"
+        },
         "rules_version": {
-          "type": "string"
+          "type": "string",
+          "description": "the first 12 hex digits of categories/perf-rules.R's sha256"
         },
         "frequency_hz": {
           "type": "integer"

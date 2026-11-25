@@ -1,9 +1,10 @@
 #!/bin/bash
 # speedR on a benchmark node: build a GNU R source tree in the toolchain image
 # (build/: housekeeping CPUs, no network), then run the timing pass on it in the
-# same image, pinned to the isolated CPU, with no network.
+# same image, or the profile pass in the profile image on top of it, pinned to
+# the isolated CPU, with no network.
 #
-#   speedr-node image                         build the toolchain image
+#   speedr-node image                         build the toolchain and profile images
 #   speedr-node env|id SOURCE                 the build settings | the build id
 #   speedr-node configure SOURCE              configure only; print config.h
 #   speedr-node build SOURCE                  build R (cached by build id) in $work/r/<id>
@@ -13,6 +14,10 @@
 #                                             the suite per code layout ->
 #                                             $work/results/LABEL/RUN_ID/, copied to
 #                                             the controller's spool
+#   speedr-node profile SOURCE [profile.py args]
+#                                             the profile pass on the build as built,
+#                                             reduced to category shares (categorize.R)
+#                                             -> the same places
 #
 # The machine is $SPEEDR_MACHINE, by default the Slurm partition
 # (machines/<name>.toml). SOURCE is a release (4.6.2), `devel` or `patched`
@@ -41,6 +46,10 @@ spool=speedr@prl-prg-bench-master:
 # the node's probe result, written by the cluster's Slurm prolog before each job
 probe=/run/prlprg-bench/probe.json
 mkdir -p "$work/src" "$work/results" "$work/r"
+
+# R as it runs (profile pass): perf records every benchmark; a recording is
+# tens of MB, so once reduced to category shares they are deleted
+profile_image=speedr-profile
 
 # the speedr account is in the docker group; others go through sudo
 docker() { if [ -w /var/run/docker.sock ]; then command docker "$@"; else sudo -n docker "$@"; fi; }
@@ -128,8 +137,9 @@ in_image() {  # LABEL ARGS... -> build/build-r.sh ARGS in the image, with this v
 name=""
 trap '[ -n "$name" ] && docker kill "$name" >/dev/null 2>&1; exit 143' TERM INT
 
-bench() {  # NAME R TIMING-ARGS... -> drivers/timing.py in the image, on the bench CPU
-    name=speedr-$1-$(date +%s)-$$; local r=$2; shift 2
+bench() {  # NAME timing|profile R ARGS... -> drivers/<pass>.py in its image, on the bench CPU
+    name=speedr-$1-$(date +%s)-$$; local pass=$2 r=$3 img=$image; shift 3
+    [ "$pass" = timing ] || img=$profile_image
     # setup() caches inputs in the benchmarks' data/ folders, some per R
     # version (Matrix objects): start every pass without them
     find "$repo/.venv" -path '*/rbench/benchmarks/*/data' -prune -exec rm -rf {} +
@@ -137,8 +147,8 @@ bench() {  # NAME R TIMING-ARGS... -> drivers/timing.py in the image, on the ben
     # call `setarch -R` makes to switch ASLR off for R
     docker run --rm --name "$name" --user "$(id -u):$(id -g)" -e HOME=/tmp --network none \
         --cpuset-cpus "$bench_cpus" --cpuset-mems 0 --security-opt seccomp=unconfined \
-        -v "$repo:$repo" -v "$work:$work" -w "$repo" "$image" \
-        .venv/bin/python drivers/timing.py --R "$r" --no-progress "$@" &
+        -v "$repo:$repo" -v "$work:$work" -w "$repo" "$img" \
+        .venv/bin/python "drivers/$pass.py" --R "$r" --no-progress "$@" &
     local rc=0; wait $! || rc=$?   # in the background, so the trap runs as soon as the signal arrives
     return $rc
 }
@@ -154,17 +164,54 @@ sentinel() {  # MACHINE DIR -> DIR/sentinel.json; exit status 3: failed
     eval "$("$repo/.venv/bin/speedr" sentinel --plan)"
     id=$(build_id "$(resolve "$version")")
     [ -x "$work/r/$id/bin/R" ] || "$0" build "$version" >&2
-    bench sentinel "$work/r/$id/bin/R" --include "$include" --runs "$runs" --iterations "$iterations" \
+    bench sentinel timing "$work/r/$id/bin/R" --include "$include" --runs "$runs" --iterations "$iterations" \
         --warmups "$warmups" --json "$2/sentinel-timing.json" --dir "$2/sentinel-exec" >/dev/null || true
     "$repo/.venv/bin/speedr" sentinel "$2/sentinel-timing.json" "$1" > "$2/sentinel.json" || rc=$?
     echo "sentinel on $(hostname -s): $(tr -d '\n ' < "$2/sentinel.json" | grep -o '"deviation":[^,]*,"status":"[a-z]*"')"
     return $rc
 }
 
+start() {  # SOURCE -> sets l machine id run_id out started uptime: a new results directory
+    l=$(resolve "$1")
+    machine=$(machine)
+    id=$(build_id "$l")
+    [ -x "$work/r/$id/bin/R" ] || { echo "R $l: no build $id; run '$0 build $l' first"; exit 1; }
+    run_id=$(date -u +%Y%m%dT%H%M%SZ)-$(openssl rand -hex 3)
+    out=$work/results/$l/$run_id; mkdir -p "$out"
+    cp "$work/r/$id/speedr-build.env" "$out/"
+    [ -r "$probe" ] && cp "$probe" "$out/"
+    started=$(date -u +%Y-%m-%dT%H:%M:%SZ) uptime=$(cut -d' ' -f1 /proc/uptime)
+}
+
+describe() {  # EXIT -> the lines of run.env every pass writes
+    echo "run_id=$run_id"; echo "label=$l"; echo "machine=$machine"; echo "node=$(hostname -s)"
+    echo "job=${SLURM_JOB_ID:-}"; echo "config=default"
+    echo "methodology=$("$repo/.venv/bin/speedr" methodology --current)"
+    echo "started=$started"; echo "finished=$(date -u +%Y-%m-%dT%H:%M:%SZ)"; echo "exit=$1"
+    echo "kernel=$(uname -r)"; echo "cmdline=$(cat /proc/cmdline)"
+    echo "os_release=$(. /etc/os-release && echo "$PRETTY_NAME")"
+    echo "boot_id=$(cat /proc/sys/kernel/random/boot_id)"; echo "uptime_s=$uptime"
+    echo "cpuset=$bench_cpus"
+    echo "source_sha256=$(sha256sum "$work/src/R-$l.tar.gz" | cut -d' ' -f1)"
+    echo "speedr=$(git -C "$repo" rev-parse HEAD)"
+    "$repo/.venv/bin/speedr" suite | awk '{ print $1 "=" $2 }'
+}
+
+to_spool() {  # copy $out to the controller's spool, $out/run.env.new last as run.env
+    # run.env last: the controller ingests a run once it has arrived
+    rsync -aR --exclude run.env.new --exclude "/$l/$run_id/perf/" "$work/results/./$l/$run_id" "$spool" &&
+        mv "$out/run.env.new" "$out/run.env" &&
+        rsync -aR "$work/results/./$l/$run_id/run.env" "$spool" &&
+        echo "results: $out, copied to the controller's spool"
+}
+
 cmd=${1:-}; shift || true
 case $cmd in
 image)
     docker build --cpuset-cpus "$housekeeping_cpus" -t "$image" "$repo/build"
+    # perf as the node's kernel has it
+    docker build --cpuset-cpus "$housekeeping_cpus" -t "$profile_image" -f "$repo/build/Dockerfile.profile" \
+        --build-arg PERF="$(dpkg-query -W -f='${Version}' linux-perf)" "$repo/build"
     ;;
 env)
     l=$(resolve "$1"); echo "# R $l: $(source_version "$l"), $(source_date "$l"), $(extra_pkg_file "$l")"
@@ -200,15 +247,7 @@ sentinel)
     sentinel "$(machine)" "$out" && echo "$out/sentinel.json"
     ;;
 run)
-    l=$(resolve "$1"); shift
-    machine=$(machine)
-    id=$(build_id "$l")
-    [ -x "$work/r/$id/bin/R" ] || { echo "R $l: no build $id; run '$0 build $l' first"; exit 1; }
-    run_id=$(date -u +%Y%m%dT%H%M%SZ)-$(openssl rand -hex 3)
-    out=$work/results/$l/$run_id; mkdir -p "$out"
-    cp "$work/r/$id/speedr-build.env" "$out/"
-    [ -r "$probe" ] && cp "$probe" "$out/"
-    started=$(date -u +%Y-%m-%dT%H:%M:%SZ) uptime=$(cut -d' ' -f1 /proc/uptime)
+    start "$1"; shift
     echo "R $l (build $id) on $machine: run $run_id on CPU $bench_cpus, kernel $(uname -r)"
 
     rc=0; sentinel "$machine" "$out" || rc=$?
@@ -228,29 +267,43 @@ run)
     for pad in $layouts; do
         k=$((k + 1)); r=$work/r/$id/bin/R
         [ "$pad" = 0 ] || r=$work/r/$id/layout/$pad/bin/R
-        bench "run$k" "$r" --runs 1 --json "$out/timing-$k.json" --csv "$out/timing-$k.csv" \
+        bench "run$k" timing "$r" --runs 1 --json "$out/timing-$k.json" --csv "$out/timing-$k.csv" \
             --dir "$out/exec-$k" "$@" || rc=$?
     done
     "$repo/.venv/bin/speedr" merge-passes "$out"/timing-[0-9]*.json > "$out/timing.json" || rc=1
-    {
-        echo "run_id=$run_id"; echo "label=$l"; echo "machine=$machine"; echo "node=$(hostname -s)"
-        echo "job=${SLURM_JOB_ID:-}"; echo "config=default"; echo "layouts=$layouts"
-        echo "methodology=$("$repo/.venv/bin/speedr" methodology --current)"
-        echo "started=$started"; echo "finished=$(date -u +%Y-%m-%dT%H:%M:%SZ)"; echo "exit=$rc"
-        echo "kernel=$(uname -r)"; echo "cmdline=$(cat /proc/cmdline)"
-        echo "os_release=$(. /etc/os-release && echo "$PRETTY_NAME")"
-        echo "boot_id=$(cat /proc/sys/kernel/random/boot_id)"; echo "uptime_s=$uptime"
-        echo "cpuset=$bench_cpus"
-        echo "source_sha256=$(sha256sum "$work/src/R-$l.tar.gz" | cut -d' ' -f1)"
-        echo "speedr=$(git -C "$repo" rev-parse HEAD)"
-        "$repo/.venv/bin/speedr" suite | awk '{ print $1 "=" $2 }'
-    } > "$out/run.env.new"
-    # run.env last: the controller ingests a run once it has arrived
-    rsync -aR --exclude run.env.new "$work/results/./$l/$run_id" "$spool" &&
-        mv "$out/run.env.new" "$out/run.env" &&
-        rsync -aR "$work/results/./$l/$run_id/run.env" "$spool" &&
-        echo "results: $out, copied to the controller's spool"
+    { describe "$rc"; echo "layouts=$layouts"; } > "$out/run.env.new"
+    to_spool
     exit $rc
     ;;
-*) echo "usage: $0 image | env|id|configure|build SOURCE | sentinel | run SOURCE [timing args]" >&2; exit 2 ;;
+profile)
+    start "$1"; shift
+    echo "R $l (build $id) on $machine: profile $run_id on CPU $bench_cpus, kernel $(uname -r)"
+    # the build as built (layout 0); then the recordings' category shares
+    # (categories/categorize.R, on the housekeeping CPUs). Once reduced, the
+    # recordings go; never copied to the spool, they stay if that failed.
+    rc=0
+    bench profile profile "$work/r/$id/bin/R" --json "$out/profile.json" --dir "$out/perf" "$@" || rc=$?
+    if "$repo/.venv/bin/speedr" profile-manifest "$out/profile.json" "$out/perf" "$out/manifest.csv" &&
+        docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp --network none \
+            --cpuset-cpus "$housekeeping_cpus" -v "$repo:$repo:ro" -v "$work:$work" "$profile_image" \
+            Rscript "$repo/categories/categorize.R" --causes "$out/profile-causes.csv" \
+            "$out/profile-shares.csv" "$out/manifest.csv"; then
+        rm -rf "$out/perf" "$out/manifest.csv"
+        # the quality gate: on average, at most 5% of a recording's samples unattributed
+        u=$(awk -F, '$4 == "unattributed" { s += $7; n++ } END { printf "%.4f", n ? s / n : 1 }' \
+            "$out/profile-shares.csv")
+        echo "profile: unattributed share $u"
+        awk -v u="$u" 'BEGIN { exit !(u <= 0.05) }' || { echo "profile: above 5%, not published"; rc=1; }
+    else
+        rc=1
+    fi
+    {
+        describe "$rc"; echo "pass=profile"
+        echo "perf=$(docker run --rm "$profile_image" perf --version)"
+        echo "rules=$(sha256sum "$repo/categories/perf-rules.R" | cut -c1-12)"
+    } > "$out/run.env.new"
+    to_spool
+    exit $rc
+    ;;
+*) echo "usage: $0 image | env|id|configure|build SOURCE | sentinel | run|profile SOURCE [driver args]" >&2; exit 2 ;;
 esac
