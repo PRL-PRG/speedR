@@ -165,6 +165,9 @@ def test_ingest_another_implementation(tmp_path):
     spool_run(spool)
     sha = "2683bf7642f68d579b2dc5fd15243aba3cc44513"
     d = spool_run(spool, label=f"rcp-{sha[:12]}", run_id="20261125T030000Z-0dd123")
+    env = (d / "speedr-build.env").read_text()   # a commit's date, as speedr-node writes it
+    (d / "speedr-build.env").write_text(
+        env.replace("date=2025-10-31", "date=2026-11-24T10:00:00+01:00"))
     (d / "run.env").write_text((d / "run.env").read_text() + (
         f"impl=rcp\nbase=4.5.2\nrepo=https://github.com/PRL-PRG/r-compile-server\nref=main\n"
         f"commit={sha}\ncommit_date=2026-11-24T10:00:00+01:00\n"))
@@ -176,6 +179,7 @@ def test_ingest_another_implementation(tmp_path):
     assert (m["impl"], m["kind"], m["version"], m["base_gnur_version"]) == (
         "rcp", "commit", sha[:12], "4.5.2")
     assert m["commit"]["sha"] == sha and m["commit"]["ref"] == "main"
+    assert m["build"]["source_date"] == "2026-11-24"
     runs = {r["impl"]: r for r in ingest.read_csv(root / "0.1" / "index" / "runs.csv")}
     assert runs["rcp"]["base"] == "4.5.2" and runs["rcp"]["commit"] == sha
     assert runs["gnur"]["base"] == "" and runs["gnur"]["kind"] == "release"

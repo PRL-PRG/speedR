@@ -159,7 +159,8 @@ def build_meta(spool_run: Path) -> dict:
         "svn_rev": rev, "config": run.get("config", "default"),
         "build": {"id": build["id"], "source": run["source_sha256"],
                   "flags": {k: v for k, v in build.items() if k not in BUILD_KEYS},
-                  "toolchain": build["toolchain"], "source_date": build["date"]},
+                  # [:10]: a commit's date has a time too
+                  "toolchain": build["toolchain"], "source_date": build["date"][:10]},
         "suite": {"repo": SUITE_REPO, "commit": run["rbench"], "bench_commit": run["bench"],
                   "speedr_commit": run["speedr"], "benchmarks": len({_benchmark(e) for e in
                                                                     report["executions"]})},
