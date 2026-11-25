@@ -1,32 +1,128 @@
 ---
 title: "Implementations"
-subtitle: "GNU R next to other R virtual machines"
+subtitle: "Other R virtual machines next to the GNU R they are built on"
 ---
 
 ```{r}
 #| include: false
 source("R/site.R")
+others <- D$runs[D$runs$impl != "gnur" & D$runs$config == "default", ]
+others <- others[order(others$date, others$started), ]
+IMPLS <- unique(others$impl)
+
+# each run of `impl` on machine `mm` against that machine's run of the GNU R
+# release the implementation is built on, over the benchmarks both ran
+against_base <- function(impl, mm) {
+  r <- others[others$impl == impl & others$machine == mm, ]
+  base <- D$runs[D$runs$impl == "gnur" & D$runs$kind == "release" & D$runs$config == "default" &
+                 D$runs$machine == mm & D$runs$version == r$base[1], ]
+  if (!nrow(r) || !nrow(base)) return(NULL)
+  base <- base[order(base$started, decreasing = TRUE)[1], ]   # its latest run
+  list(runs = r, base = base, timeline = timeline(D$est, r, base$run))
+}
+short <- function(sha) substr(sha, 1, 8)
 ```
 
 ```{r}
-div(class = "rs-empty", tags$strong("Only GNU R is measured so far."))
+#| eval: !expr "length(IMPLS) == 0"
+not_yet("Only GNU R is measured so far.")
 ```
 
-## Planned
+```{r}
+#| eval: !expr "length(IMPLS) > 0"
+tagList(lapply(IMPLS, function(impl) {
+  machines <- unique(others$machine[others$impl == impl])
+  tagList(tags$h2(impl), machine_tabs(machines, function(mm) {
+    a <- against_base(impl, mm)
+    if (is.null(a)) return(not_yet(paste0("No run of GNU R ", others$base[others$impl == impl][1],
+                                          " on this machine to compare with yet.")))
+    last <- a$runs[nrow(a$runs), ]
+    sp <- speedups(D$est[D$est$run == a$base$run, ], D$est[D$est$run == last$run, ])
+    g <- geomean_speedup(sp)
+    tl <- a$timeline
+    hover <- sprintf("<b>%s %s</b> (%s)<br>%s vs R %s (95%% CI %s–%s)<br>%d benchmarks",
+                     impl, short(tl$commit), fmt_date(tl$date), fmt_speedup(tl$speedup),
+                     a$base$version, fmt_speedup(tl$lo), fmt_speedup(tl$hi), tl$n)
+    fig <- plot_ly(tl, x = ~date, height = 330) |>
+      add_ribbons(ymin = ~lo, ymax = ~hi, fillcolor = LIGHT[["band"]], line = list(width = 0),
+                  hoverinfo = "skip", showlegend = FALSE) |>
+      add_trace(y = ~speedup, type = "scatter", mode = "lines+markers",
+                line = list(color = LIGHT[["series1"]], width = 2),
+                marker = list(color = LIGHT[["series1"]], size = 7),
+                text = hover, hoverinfo = "text", showlegend = FALSE) |>
+      rs_layout(x = ax(NULL, type = "date"),
+                y = speedup_axis(paste("Speedup over GNU R", a$base$version), c(tl$lo, tl$hi)),
+                legend = FALSE, shapes = list(baseline_line()))
+    by_suite <- do.call(rbind, lapply(SUITES, function(s) {
+      ids <- D$benchmarks$id[D$benchmarks$suite == s]
+      x <- geomean_speedup(sp, ids)
+      if (x$n == 0) NULL else cbind(suite = s, x)
+    }))
+    sp$suite <- D$benchmarks$suite[match(sp$benchmark, D$benchmarks$id)]
+    sp$base_ms <- D$est$est_ms[D$est$run == a$base$run][match(sp$benchmark, D$est$benchmark[D$est$run == a$base$run])]
+    sp$new_ms <- D$est$est_ms[D$est$run == last$run][match(sp$benchmark, D$est$benchmark[D$est$run == last$run])]
+    sp <- sp[order(-sp$speedup), ]
+    unsupported <- setdiff(D$est$benchmark[D$est$run == a$base$run], sp$benchmark)
+    tagList(
+      tiles(
+        tile(paste0("Latest: ", short(last$commit)), fmt_speedup(g$speedup),
+             sprintf("over GNU R %s · 95%% CI %s–%s", a$base$version, fmt_speedup(g$lo), fmt_speedup(g$hi))),
+        tile("Commit", fmt_date(last$date),
+             paste0(if (isTRUE(nzchar(last$ref)) && last$ref != last$commit) paste0(last$ref, " · ") else "",
+                    nrow(a$runs), ngettext(nrow(a$runs), " commit measured", " commits measured"))),
+        tile("Faster / slower", paste(sum(sp$significant & sp$speedup > 1), "/",
+                                      sum(sp$significant & sp$speedup < 1)),
+             "benchmarks with a clear change (95% CI, > 2%)"),
+        tile("Runs", paste(nrow(sp), "benchmarks"),
+             if (length(unsupported)) paste(length(unsupported), "fail on it") else "all of GNU R's")
+      ),
+      div(class = "rs-card",
+        div(class = "rs-card-title", paste("Every commit against GNU R", a$base$version)),
+        div(class = "rs-card-sub", "Geometric mean over the benchmarks every commit ran, with its 95% interval; above 1× is faster."),
+        fig),
+      div(class = "rs-card",
+        div(class = "rs-card-title", paste0("By suite (", short(last$commit), ")")),
+        rs_table(data.frame(Suite = by_suite$suite, Benchmarks = by_suite$n,
+                            Speedup = fmt_speedup(by_suite$speedup),
+                            `95% CI` = paste(fmt_speedup(by_suite$lo), "–", fmt_speedup(by_suite$hi)),
+                            check.names = FALSE), pagination = FALSE, sortable = FALSE)),
+      div(class = "rs-card",
+        div(class = "rs-card-title", paste0("Every benchmark (", short(last$commit), ")")),
+        rs_table(data.frame(suite = sp$suite, benchmark = sp$benchmark,
+                            `GNU R` = fmt_ms(sp$base_ms), impl = fmt_ms(sp$new_ms),
+                            speedup = fmt_speedup(sp$speedup),
+                            `95% CI` = paste(fmt_speedup(sp$lo), "–", fmt_speedup(sp$hi)),
+                            change = vapply(seq_len(nrow(sp)), function(i) as.character(
+                              status(if (!sp$significant[i]) "same" else if (sp$speedup[i] > 1) "faster" else "slower")), ""),
+                            check.names = FALSE) |> setNames(c("suite", "benchmark", paste("GNU R", a$base$version),
+                                                               impl, "speedup", "95% CI", "change")),
+                 searchable = TRUE, defaultPageSize = 20,
+                 columns = setNames(list(colDef(minWidth = 230, cell = function(v) tags$a(href = bench_url(v), v)),
+                                         colDef(html = TRUE)), c("benchmark", "change"))),
+        if (length(unsupported)) p(class = "rs-muted", "Fail on it: ", paste(unsupported, collapse = ", ")))
+    )
+  }))
+}))
+```
+
+## All implementations
 
 ```{r}
-rs_table(data.frame(
+known <- data.frame(
   Implementation = c("GNU R", "rcp", "Ř (PIR)", "FastR"),
   Kind = c("reference interpreter (AST + byte code)", "copy-and-patch JIT (R package on a patched GNU R)",
            "optimising JIT", "GraalVM / Truffle"),
-  `Base GNU R` = c("–", "4.x (same as the patched tree)", "4.1.1 (pinned image)", "own"),
-  Driver = c("drivers/timing.py", "to be written", "to be written", "to be written"),
-  Status = c(as.character(status("validated")), "planned", "planned", "planned"),
-  check.names = FALSE),
-  columns = list(Status = colDef(html = TRUE)), pagination = FALSE, sortable = FALSE)
+  `Built on` = c("–", "GNU R 4.5.2 (patched)", "GNU R 4.1.1 (patched)", "own"),
+  Status = c(as.character(status("validated")),
+             if ("rcp" %in% IMPLS) as.character(status("experimental")) else "planned",
+             "planned", "planned"),
+  check.names = FALSE)
+rs_table(known, columns = list(Status = colDef(html = TRUE)), pagination = FALSE, sortable = FALSE)
 ```
 
 ::: {.rs-notes}
-- Each implementation will be compared with its own versions and options, and with the GNU R release it is built on, using the same benchmarks, machine and harness.
-- Every driver builds on r-benchmarks' `rbench` module, so an implementation changes only what makes it different (its command line, harness or environment) and the rest of the measurement is the same.
+- An implementation other than GNU R is built from a commit of its repository with the compiler and settings of the GNU R release it is built on, and measured by the same harness, run design and code layouts as GNU R, on the same machines, under the same methodology. Its commits are compared with that release, never across machines.
+- **rcp:** after a benchmark's `setup()`, before its first iteration, every function the benchmark defined is compiled with `rcp_cmpfun()` (optimisation level 3); closures created inside them are compiled with them, package code runs as installed, and rcp's JIT is not used. The compilation is outside the measured iterations, as GNU R's byte-compilation is (it happens in the warm-up).
+- Profiles are recorded for GNU R only: perf does not see a JIT's generated code without its help, and the category rules know GNU R's interpreter.
+- How to add one: `impls/` in the speedR repository.
 :::

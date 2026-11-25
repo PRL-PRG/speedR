@@ -7,6 +7,10 @@
 #   speedr-submit run SOURCE [timing args]   one job: build if needed, then the timing pass
 #   speedr-submit profile SOURCE [profile args]   the same with the profile pass
 #
+# SOURCE as node/speedr-node takes it: a GNU R release (4.5.2), devel, or
+# another implementation at a branch or commit (rcp@main). The job resolves it
+# once, so its build and its run are of the same snapshot or commit.
+#
 # Jobs run as the speedr account, whatever account submits them, from its
 # checkout ~speedr/speedr on the node. Job output: ~speedr/speedr-work/slurm-<job>.out;
 # a run's results end up in the controller's spool (/srv/speedr/spool).
@@ -14,6 +18,8 @@ set -euo pipefail
 [ "$(id -un)" = speedr ] || exec sudo -n -u speedr -H "$0" "$@"
 partition=${SPEEDR_PARTITION:-kabylake}
 node=$HOME/speedr/node/speedr-node   # the same path on the node
+
+title() { case $1 in *@*) echo "$1" ;; *) echo "R-$1" ;; esac; }   # SOURCE -> job name
 
 job() {  # NAME COMMAND -> job id
     sbatch --parsable --partition="$partition" --exclusive --job-name="$1" --time=2-00:00:00 \
@@ -23,11 +29,11 @@ job() {  # NAME COMMAND -> job id
 cmd=${1:-}; shift || true
 case $cmd in
 build)
-    for s in "$@"; do echo "$(job "build R-$s" "$node build $s") build R-$s"; done
+    for s in "$@"; do echo "$(job "build $(title "$s")" "$node build $s") build $(title "$s")"; done
     ;;
 run|profile)
     s=$1; shift
-    echo "$(job "$cmd R-$s" "$node build $s && $node $cmd $s ${*@Q}") $cmd R-$s"
+    echo "$(job "$cmd $(title "$s")" "l=\$($node resolve $s) && $node build \$l && $node $cmd \$l ${*@Q}") $cmd $(title "$s")"
     ;;
 *) echo "usage: $0 build SOURCE... | run|profile SOURCE [driver args]" >&2; exit 2 ;;
 esac

@@ -197,13 +197,14 @@ generate_mock <- function(outdir = "data/mock", registry_path = "data/benchmarks
   runs <- list(); res <- list(); prof <- list()
   run_id <- 0L
   add_run <- function(machine, version, config, kind, date, svn_rev, extra, mi,
-                      suspect = FALSE, shift = NULL) {
+                      suspect = FALSE, shift = NULL, impl = "gnur", base = "", commit = "") {
     run_id <<- run_id + 1L
     m <- MACHINES[mi, ]
-    ok <- version_key(b$min_version) <= version_key(if (kind == "devel") "4.6.1" else version)
+    as_r <- switch(kind, devel = "4.6.1", commit = base, version)   # the GNU R it behaves as
+    ok <- version_key(b$min_version) <= version_key(as_r)
     rows <- vector("list", nrow(b)); prow <- vector("list", nrow(b))
     for (i in seq_len(nrow(b))) {
-      mt <- model_time(b$base_ms[i], bm$shares[i, ], if (kind == "devel") "4.6.1" else version, extra)
+      mt <- model_time(b$base_ms[i], bm$shares[i, ], as_r, extra)
       t <- mt$time * m$speed * inter[i, mi]
       if (!is.null(shift)) t <- t * shift[i]
       if (suspect) t <- t * 1.05
@@ -213,7 +214,7 @@ generate_mock <- function(outdir = "data/mock", registry_path = "data/benchmarks
       rows[[i]] <- data.frame(run = run_id, benchmark = b$id[i], process = 1:5,
                               time_ms = round(proc, 2), gc_ms = round(gc, 2),
                               max_rss_mb = rss)
-      if (ok[i] && config == "default") {
+      if (ok[i] && config == "default" && impl == "gnur") {
         sh <- c(mt$shares, other = 0.002)          # every category, as categorize.R writes them
         sh <- sh * exp(rnorm(length(sh), 0, 0.04))   # multiplicative: small shares stay > 0
         sh <- sh / sum(sh)
@@ -226,13 +227,14 @@ generate_mock <- function(outdir = "data/mock", registry_path = "data/benchmarks
       }
     }
     runs[[run_id]] <<- data.frame(
-      run = run_id, methodology = "0.1", machine = machine, impl = "gnur", version = version,
+      run = run_id, methodology = "0.1", machine = machine, impl = impl, version = version,
       kind = kind, config = config, date = date, svn_rev = svn_rev,
       suspect = suspect, sentinel_drift = round(if (suspect) 0.052 else rnorm(1, 0, 0.006), 4),
       n_ok = sum(ok), n_total = nrow(b), node = paste0(machine, "-box1"),
       started = paste0(if (kind == "devel") date else "2026-11-20", "T02:00:00Z"),
       sentinel_status = if (suspect) "suspect" else "ok", probe_status = "ok",
-      thermal_suspect = 0L, stringsAsFactors = FALSE)
+      thermal_suspect = 0L, base = base, commit = commit, ref = if (nzchar(commit)) "main" else "",
+      stringsAsFactors = FALSE)
     res[[run_id]] <<- do.call(rbind, rows)
     prof[[run_id]] <<- do.call(rbind, prow)
   }
@@ -271,6 +273,19 @@ generate_mock <- function(outdir = "data/mock", registry_path = "data/benchmarks
     add_run("prl-bench-x64-1", paste0("devel@r", rev), "default", "devel",
             as.character(nights[j]), rev, CONFIG_EXTRA$default, 1L,
             suspect = (j == 88), shift = shift)
+  }
+
+  # rcp, another implementation: a commit of its main branch every few days,
+  # built on R 4.5.2; its JIT makes the interpreter's own work (eval) faster
+  # commit by commit, and one commit regresses
+  base <- "4.5.2"
+  days <- seq(as.Date("2026-09-01"), as.Date("2026-11-20"), by = "4 days")
+  for (j in seq_along(days)) {
+    sha <- paste(sample(c(0:9, letters[1:6]), 40, replace = TRUE), collapse = "")
+    jit <- 0.62 - 0.12 * j / length(days) + if (j == 9) 0.10 else 0
+    add_run("prl-bench-x64-1", substr(sha, 1, 12), "default", "commit", as.character(days[j]),
+            NA_integer_, c(eval = jit, prim = 0.97, mem = 1.02, native = 1), 1L,
+            impl = "rcp", base = base, commit = sha)
   }
 
   runs <- do.call(rbind, runs)

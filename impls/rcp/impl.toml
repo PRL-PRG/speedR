@@ -1,0 +1,11 @@
+# rcp: a copy-and-patch JIT compiler for R (Kocourek et al., VMIL 2025), an R
+# package on a patched GNU R, both in r-compile-server (client/rcp, and the R
+# submodule). Built at a commit, compared with the GNU R release it patches.
+name = "rcp"
+title = "rcp"
+description = "Copy-and-patch JIT compiler: an R package on a patched GNU R"
+status = "experimental"
+repo = "https://github.com/PRL-PRG/r-compile-server"
+base = "4.5.2"
+track = "main"
+layouts = true
